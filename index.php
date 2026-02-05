@@ -100,6 +100,8 @@ function buildQueryString($overrides = []) {
     return http_build_query($params);
 }
 
+$meta_title = $APP_NAME . ' - Library';
+$meta_description = 'Browse educational resources from ' . ($FULL_APP_NAME ?? $APP_NAME) . '.';
 include __DIR__ . '/includes/header.php';
 ?>
 

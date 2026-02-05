@@ -1,6 +1,63 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Redirect legacy .php URLs to clean routes (SEO-friendly)
+    RewriteCond %{THE_REQUEST} \s/+index\.php[\s?] [NC]
+    RewriteRule ^index\.php$ / [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+login\.php[\s?] [NC]
+    RewriteRule ^login\.php$ /login [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+logout\.php[\s?] [NC]
+    RewriteRule ^logout\.php$ /logout [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+resource\.php\?id=([0-9]+) [NC]
+    RewriteRule ^resource\.php$ /resource/%1? [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+viewer\.php\?id=([0-9]+) [NC]
+    RewriteRule ^viewer\.php$ /viewer/%1? [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+pdf_viewer\.php\?token=([A-Fa-f0-9]+) [NC]
+    RewriteRule ^pdf_viewer\.php$ /pdf/%1? [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+secure_file\.php\?token=([A-Fa-f0-9]+) [NC]
+    RewriteRule ^secure_file\.php$ /secure/%1? [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/index\.php[\s?] [NC]
+    RewriteRule ^admin/index\.php$ /admin [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/dashboard\.php[\s?] [NC]
+    RewriteRule ^admin/dashboard\.php$ /admin/dashboard [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/resources\.php[\s?] [NC]
+    RewriteRule ^admin/resources\.php$ /admin/resources [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/resource_add\.php[\s?] [NC]
+    RewriteRule ^admin/resource_add\.php$ /admin/resource/add [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/resource_edit\.php\?id=([0-9]+) [NC]
+    RewriteRule ^admin/resource_edit\.php$ /admin/resource/edit/%1? [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/resource_delete\.php\?id=([0-9]+) [NC]
+    RewriteRule ^admin/resource_delete\.php$ /admin/resource/delete/%1? [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/categories\.php\?(.+) [NC]
+    RewriteRule ^admin/categories\.php$ /admin/categories?%1 [R=301,L]
+    RewriteCond %{THE_REQUEST} \s+/admin/categories\.php[\s?] [NC]
+    RewriteRule ^admin/categories\.php$ /admin/categories [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/users\.php[\s?] [NC]
+    RewriteRule ^admin/users\.php$ /admin/users [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/user_add\.php[\s?] [NC]
+    RewriteRule ^admin/user_add\.php$ /admin/user/add [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/user_edit\.php\?id=([0-9]+) [NC]
+    RewriteRule ^admin/user_edit\.php$ /admin/user/edit/%1? [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/user_delete\.php\?id=([0-9]+) [NC]
+    RewriteRule ^admin/user_delete\.php$ /admin/user/delete/%1? [R=301,L]
+
     # Skip existing files and directories
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d

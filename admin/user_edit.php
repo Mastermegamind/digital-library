@@ -66,7 +66,8 @@ if ($role === 'staff' || $role === 'admin') {
             ['jpg','jpeg','png','gif','webp'],
             __DIR__ . '/../uploads/avatars',
             'uploads/avatars',
-            10 * 1024 * 1024
+            10 * 1024 * 1024,
+            ['max_width' => 512, 'max_height' => 512, 'max_pixels' => 4000000, 'quality' => 85]
         );
         if ($avatarUpload['error']) {
             $errors[] = $avatarUpload['error'];
@@ -200,43 +201,12 @@ if ($role === 'staff' || $role === 'admin') {
 }
 
 $csrf = get_csrf_token();
+$meta_title = 'Edit User - ' . $user['name'] . ' | ' . $APP_NAME;
+$meta_description = 'Update user account details in the ' . $APP_NAME . ' admin panel.';
 include __DIR__ . '/../includes/header.php';
 ?>
 
-<style>
-    .page-header{background:linear-gradient(135deg,rgba(37,99,235,0.1),rgba(59,130,246,0.05));border-radius:20px;padding:2rem;margin-bottom:2rem;border:1px solid rgba(37,99,235,0.1)}
-    .form-card{background:white;border-radius:16px;padding:2.5rem;box-shadow:0 4px 6px rgba(0,0,0,0.07)}
-    .form-section{margin-bottom:2rem;padding-bottom:2rem;border-bottom:2px solid var(--border-color)}
-    .form-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
-    .section-title{font-size:1.125rem;font-weight:700;color:var(--primary-color);margin-bottom:1.5rem;display:flex;align-items:center;gap:.75rem}
-    .form-label{font-weight:600;color:var(--text-primary);margin-bottom:.5rem;font-size:.875rem;display:flex;align-items:center;gap:.5rem}
-    .form-label .required{color:#ef4444}
-    .form-control,.form-select{border:2px solid var(--border-color);border-radius:12px;padding:.875rem 1.25rem;font-size:1rem;transition:all .3s ease}
-    .form-control:focus,.form-select:focus{border-color:var(--primary-color);box-shadow:0 0 0 4px rgba(37,99,235,0.1)}
-    .form-text{color:var(--text-secondary);font-size:.8rem;margin-top:.375rem;display:flex;align-items:center;gap:.375rem}
-    .action-buttons{display:flex;gap:1rem;justify-content:flex-end;padding-top:2rem;border-top:2px solid var(--border-color)}
-    .alert-danger{background:rgba(239,68,68,0.1);border-left:4px solid #ef4444;border-radius:12px;padding:1.25rem;margin-bottom:2rem}
-    .role-selector{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
-    .role-option{border:2px solid var(--border-color);border-radius:12px;padding:1.5rem;cursor:pointer;transition:all .3s ease;text-align:center}
-    .role-option:hover{border-color:var(--primary-color);background:rgba(37,99,235,0.03)}
-    .role-option input[type=radio]{display:none}
-    .role-option input[type=radio]:checked ~ .role-content .role-icon{background:linear-gradient(135deg,var(--primary-color),var(--accent-color));color:white}
-    .role-icon{width:60px;height:60px;margin:0 auto 1rem;background:rgba(37,99,235,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.75rem;transition:all .3s ease}
 
-    /* Avatar Drag & Drop */
-    .avatar-upload-area{border:2px dashed var(--border-color);border-radius:16px;padding:2.5rem;text-align:center;transition:all .3s ease;background:rgba(37,99,235,0.02);cursor:pointer;position:relative}
-    .avatar-upload-area:hover{border-color:var(--primary-color);background:rgba(37,99,235,0.05)}
-    .avatar-upload-area.dragover{border-color:var(--primary-color);background:rgba(37,99,235,0.1);border-style:solid}
-    .avatar-upload-icon{font-size:4.5rem;color:var(--primary-color);opacity:0.5;transition:all .3s ease}
-    .avatar-upload-area:hover .avatar-upload-icon{opacity:0.8;transforms:scale(1.1)}
-    .avatar-preview{margin-top:1.5rem;display:none;overflow:hidden;border-radius:50%;width:200px;height:200px;margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative}
-    .avatar-preview.active{display:block}
-    .avatar-preview img{width:100%;height:100%;object-fit:cover}
-    .avatar-preview-remove{position:absolute;top:10px;right:10px;background:rgba(239,68,68,0.9);color:white;border:none;padding:.6rem 1rem;border-radius:8px;cursor:pointer;font-weight:600;transition:all .3s}
-    .avatar-preview-remove:hover{background:#dc2626}
-    .hidden-input{display:none}
-    .current-info-text{font-size:0.875rem;color:var(--text-secondary);margin-top:1rem}
-</style>
 
 <div class="page-header">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">

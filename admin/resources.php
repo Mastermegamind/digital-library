@@ -7,6 +7,8 @@ $stmt = $pdo->query("SELECT r.*, c.name AS category_name FROM resources r
                      ORDER BY r.created_at DESC");
 $resources = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+$meta_title = 'Manage Resources - Admin | ' . $APP_NAME;
+$meta_description = 'Manage uploaded learning resources in the ' . $APP_NAME . ' admin panel.';
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -305,11 +307,13 @@ foreach ($resources as $r) {
                                 <a href="<?= h(app_path('admin/resource/edit/' . $r['id'])) ?>" class="btn btn-sm btn-outline-secondary btn-action">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="<?= h(app_path('admin/resource/delete/' . $r['id'])) ?>?csrf=<?= h(get_csrf_token()) ?>"
-                                   class="btn btn-sm btn-danger btn-action"
-                                   onclick="return confirm('Are you sure you want to delete this resource? This action cannot be undone.');">
-                                    <i class="fas fa-trash-alt"></i>
-                                </a>
+                                <form method="post" action="<?= h(app_path('admin/resource/delete/' . $r['id'])) ?>" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="<?= h(get_csrf_token()) ?>">
+                                    <button type="submit" class="btn btn-sm btn-danger btn-action"
+                                            onclick="return confirm('Are you sure you want to delete this resource? This action cannot be undone.');">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                     <?php endforeach; ?>

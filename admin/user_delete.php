@@ -2,8 +2,12 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_admin();
 
-$id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
-$csrf = $_GET['csrf'] ?? '';
+$id = isset($_POST['id']) ? (int) $_POST['id'] : (isset($_GET['id']) ? (int) $_GET['id'] : 0);
+$csrf = $_POST['csrf_token'] ?? ($_GET['csrf'] ?? '');
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    log_warning('User delete attempted via GET', ['user_id' => $id]);
+}
 
 if (!verify_csrf_token($csrf)) {
     flash_message('error', 'Invalid session token.');

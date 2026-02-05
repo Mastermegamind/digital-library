@@ -37,6 +37,8 @@ $sections = [
     ],
 ];
 
+$meta_title = 'Admin Panel - ' . $APP_NAME;
+$meta_description = 'Administrative overview and management tools for ' . $APP_NAME . '.';
 include __DIR__ . '/../includes/header.php';
 ?>
 

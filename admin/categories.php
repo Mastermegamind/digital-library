@@ -26,6 +26,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    $action = $_POST['action'] ?? 'create';
+    $categoryId = (int)($_POST['category_id'] ?? 0);
+
+    if ($action === 'delete') {
+        if ($categoryId <= 0) {
+            flash_message('error', 'Invalid category selection.');
+            header('Location: ' . app_path('admin/categories'));
+            exit;
+        }
+        $stmt = $pdo->prepare("SELECT cover_image_path FROM categories WHERE id = :id");
+        $stmt->execute([':id' => $categoryId]);
+        $cat = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($cat && $coverPath = $cat['cover_image_path'] ?? null) {
+            delete_uploaded_file($coverPath);
+        }
+        $stmt = $pdo->prepare("DELETE FROM categories WHERE id = :id");
+        $stmt->execute([':id' => $categoryId]);
+        log_info('Category deleted', ['category_id' => $categoryId]);
+        flash_message('success', 'Category deleted.');
+        header('Location: ' . app_path('admin/categories'));
+        exit;
+    }
+
     $name = trim($_POST['name'] ?? '');
     if ($name === '') {
         flash_message('error', 'Category name is required.');
@@ -33,15 +56,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    $action = $_POST['action'] ?? 'create';
-    $categoryId = (int)($_POST['category_id'] ?? 0);
-
     $coverUpload = handle_file_upload(
         $_FILES['cover_image'] ?? null,
         ['jpg','jpeg','png','gif','webp'],
         __DIR__ . '/../uploads/category_covers',
         'uploads/category_covers',
-        10 * 1024 * 1024
+        10 * 1024 * 1024,
+        ['max_width' => 1600, 'max_height' => 1600, 'max_pixels' => 12000000, 'quality' => 85]
     );
     if ($coverUpload['error']) {
         flash_message('error', $coverUpload['error']);
@@ -108,6 +129,8 @@ $stmt = $pdo->query("SELECT * FROM categories ORDER BY name ASC");
 $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $csrf = get_csrf_token();
+$meta_title = 'Manage Categories - Admin | ' . $APP_NAME;
+$meta_description = 'Create and manage resource categories in the ' . $APP_NAME . ' admin panel.';
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -442,11 +465,15 @@ include __DIR__ . '/../includes/header.php';
                                         <a href="<?= h(app_path('admin/categories')) ?>?edit=<?= $c['id'] ?>" class="btn btn-sm btn-outline-secondary">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <a href="<?= h(app_path('admin/categories')) ?>?delete=<?= $c['id'] ?>&csrf=<?= h($csrf) ?>"
-                                           class="btn btn-sm btn-danger ms-1"
-                                           onclick="return confirm('Delete this category? This cannot be undone.');">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </a>
+                                        <form method="post" action="<?= h(app_path('admin/categories')) ?>" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                                            <input type="hidden" name="action" value="delete">
+                                            <input type="hidden" name="category_id" value="<?= (int)$c['id'] ?>">
+                                            <button type="submit" class="btn btn-sm btn-danger ms-1"
+                                                    onclick="return confirm('Delete this category? This cannot be undone.');">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </form>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

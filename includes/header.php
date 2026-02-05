@@ -87,6 +87,7 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
     <link href="<?php echo h(app_path('assets/css/bootstrap.min.css')); ?>" rel="stylesheet">
     <link rel="stylesheet" href="<?php echo h(app_path('assets/css/all.min.css')); ?>">
     <link rel="stylesheet" href="<?php echo h(app_path('assets/css/inter.css')); ?>">
+    <link rel="stylesheet" href="<?php echo h(app_path('assets/css/components.css')); ?>">
     <style>
         :root {
 --primary-color: #009D52;

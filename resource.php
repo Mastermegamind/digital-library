@@ -23,6 +23,11 @@ $type        = $resource['type'];
 $filePath    = $resource['file_path'];
 $externalUrl = $resource['external_url'];
 
+$meta_title = $title . ' - ' . $APP_NAME;
+$meta_description = !empty($resource['description'])
+    ? substr(trim(strip_tags($resource['description'])), 0, 160)
+    : 'View resource details in ' . ($FULL_APP_NAME ?? $APP_NAME) . '.';
+
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');

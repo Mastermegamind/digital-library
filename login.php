@@ -7,19 +7,29 @@ if (is_logged_in()) {
 }
 
 $errors = [];
+$clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $identifier = trim($_POST['identifier'] ?? '');
     $password   = $_POST['password'] ?? '';
     $csrf       = $_POST['csrf_token'] ?? '';
+    $rateKeyIp = 'login:ip:' . $clientIp;
+    $rateKeyId = $identifier !== '' ? 'login:id:' . $clientIp . ':' . strtolower($identifier) : null;
+    $rateBlockedIp = rate_limit_is_blocked($rateKeyIp);
+    $rateBlockedId = $rateKeyId ? rate_limit_is_blocked($rateKeyId) : ['blocked' => false, 'retry_after' => 0];
 
-    if (!verify_csrf_token($csrf)) {
+    if ($rateBlockedIp['blocked'] || $rateBlockedId['blocked']) {
+        $retryAfter = max($rateBlockedIp['retry_after'], $rateBlockedId['retry_after']);
+        $minutes = max(1, (int)ceil($retryAfter / 60));
+        $errors[] = 'Too many login attempts. Please try again in ' . $minutes . ' minute' . ($minutes > 1 ? 's' : '') . '.';
+        log_warning('Login rate limit triggered', ['ip' => $clientIp, 'identifier' => $identifier]);
+    } elseif (!verify_csrf_token($csrf)) {
         $errors[] = 'Invalid session. Please try again.';
         log_warning('Login CSRF failed');
     } elseif ($identifier === '' || $password === '') {
         $errors[] = 'Please enter your login ID or email and password.';
     } else {
-        global $pdo;
+        global $pdo, $LOGIN_RATE_LIMIT, $LOGIN_RATE_WINDOW, $LOGIN_LOCK_SECONDS;
 
         // Try email first
         $stmt = $pdo->prepare("
@@ -49,6 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password_hash'])) {
             login_user($user['id']);
+            rate_limit_reset($rateKeyIp);
+            if ($rateKeyId) {
+                rate_limit_reset($rateKeyId);
+            }
 
             if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
                 $method = 'Email';
@@ -69,7 +83,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } else {
             log_warning('Invalid login attempt', ['identifier' => $identifier]);
-            $errors[] = 'Invalid login credentials. Please try again.';
+            $rateLimit = (int)($LOGIN_RATE_LIMIT ?? 8);
+            $rateWindow = (int)($LOGIN_RATE_WINDOW ?? 900);
+            $rateLock = (int)($LOGIN_LOCK_SECONDS ?? 900);
+            $rateResultIp = rate_limit_register_failure($rateKeyIp, $rateLimit, $rateWindow, $rateLock);
+            if ($rateKeyId) {
+                rate_limit_register_failure($rateKeyId, $rateLimit, $rateWindow, $rateLock);
+            }
+            if ($rateResultIp['blocked']) {
+                $minutes = max(1, (int)ceil($rateResultIp['retry_after'] / 60));
+                $errors[] = 'Too many login attempts. Please try again in ' . $minutes . ' minute' . ($minutes > 1 ? 's' : '') . '.';
+            } else {
+                $errors[] = 'Invalid login credentials. Please try again.';
+            }
         }
     }
 }

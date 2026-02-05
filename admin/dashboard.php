@@ -14,6 +14,8 @@ $recentResources = $pdo->query("SELECT r.*, c.name AS category_name
     ORDER BY r.created_at DESC 
     LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
 
+$meta_title = 'Admin Dashboard - ' . $APP_NAME;
+$meta_description = 'Administrative dashboard overview for ' . $APP_NAME . '.';
 include __DIR__ . '/../includes/header.php';
 ?>
 

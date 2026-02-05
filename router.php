@@ -26,6 +26,11 @@ if ($requestPath === '/logout') {
     exit;
 }
 
+if ($requestPath === '/sitemap.xml') {
+    require __DIR__ . '/sitemap.php';
+    exit;
+}
+
 if (preg_match('#^/resource/([0-9]+)/?$#', $requestPath, $matches)) {
     $_GET['id'] = (int)$matches[1];
     require __DIR__ . '/resource.php';
@@ -111,4 +116,4 @@ if (preg_match('#^/admin/user/delete/([0-9]+)/?$#', $requestPath, $matches)) {
 }
 
 http_response_code(404);
-echo 'Page not found.';
+render_error_page(404, 'Page Not Found', 'The page you requested could not be found.');

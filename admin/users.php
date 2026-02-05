@@ -12,6 +12,8 @@ $stmt = $pdo->query("
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $csrf = get_csrf_token();
 
+$meta_title = 'Manage Users - Admin | ' . $APP_NAME;
+$meta_description = 'View and manage user accounts in the ' . $APP_NAME . ' admin panel.';
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -114,11 +116,13 @@ $staffCount = count(array_filter($users, fn($u) => $u['role'] === 'staff'));
                             <td><small class="text-muted"><i class="fas fa-calendar-alt me-1"></i><?= date('M d, Y', strtotime($u['created_at'])) ?></small></td>
                             <td class="text-end">
                                 <a href="<?= h(app_path('admin/user/edit/' . $u['id'])) ?>" class="btn btn-sm btn-outline-secondary btn-action"><i class="fas fa-edit"></i></a>
-                                <a href="<?= h(app_path('admin/user/delete/' . $u['id'])) ?>?csrf=<?= h($csrf) ?>"
-                                   class="btn btn-sm btn-danger btn-action"
-                                   onclick="return confirm('Are you sure you want to delete this user?');">
-                                    <i class="fas fa-trash-alt"></i>
-                                </a>
+                                <form method="post" action="<?= h(app_path('admin/user/delete/' . $u['id'])) ?>" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                                    <button type="submit" class="btn btn-sm btn-danger btn-action"
+                                            onclick="return confirm('Are you sure you want to delete this user?');">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                     <?php endforeach; ?>
