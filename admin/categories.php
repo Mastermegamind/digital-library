@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+redirect_legacy_php('admin/categories');
 require_admin();
 
 $editCategory = null;
@@ -133,219 +134,11 @@ $meta_title = 'Manage Categories - Admin | ' . $APP_NAME;
 $meta_description = 'Create and manage resource categories in the ' . $APP_NAME . ' admin panel.';
 include __DIR__ . '/../includes/header.php';
 ?>
-
-<style>
-    .page-header {
-        background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(59, 130, 246, 0.05));
-        border-radius: 20px;
-        padding: 2rem;
-        margin-bottom: 2rem;
-        border: 1px solid rgba(37, 99, 235, 0.1);
-    }
-
-    .form-card {
-        background: white;
-        border-radius: 16px;
-        padding: 2.5rem;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-        transition: all 0.3s ease;
-    }
-
-    .form-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
-    }
-
-    .section-title {
-        font-size: 1.125rem;
-        font-weight: 700;
-        color: var(--primary-color);
-        margin-bottom: 1.5rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .form-label {
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: 0.5rem;
-        font-size: 0.875rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .form-control, .form-select {
-        border: 2px solid var(--border-color);
-        border-radius: 12px;
-        padding: 0.875rem 1.25rem;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-    }
-
-    .form-control:focus, .form-select:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
-    }
-
-    .file-upload-area {
-        border: 2px dashed var(--border-color);
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        transition: all 0.3s ease;
-        background: rgba(37, 99, 235, 0.02);
-        cursor: pointer;
-        position: relative;
-    }
-
-    .file-upload-area:hover {
-        border-color: var(--primary-color);
-        background: rgba(37, 99, 235, 0.05);
-    }
-
-    .file-upload-area.dragover {
-        border-color: var(--primary-color);
-        background: rgba(37, 99, 235, 0.1);
-        border-style: solid;
-    }
-
-    .file-upload-icon {
-        font-size: 3rem;
-        color: var(--primary-color);
-        margin-bottom: 1rem;
-        opacity: 0.5;
-        transition: all 0.3s ease;
-    }
-
-    .file-upload-area:hover .file-upload-icon {
-        opacity: 0.8;
-        transform: scale(1.1);
-    }
-
-    .file-upload-text strong { color: var(--primary-color); }
-
-    .image-preview {
-        margin-top: 1rem;
-        display: none;
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        position: relative;
-    }
-
-    .image-preview.active { display: block; }
-
-    .image-preview img {
-        width: 100%;
-        max-height: 300px;
-        object-fit: cover;
-    }
-
-    .image-preview-remove {
-        position: absolute;
-        top: 10px; right: 10px;
-        background: rgba(239, 68, 68, 0.9);
-        color: white;
-        border: none;
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: 600;
-    }
-
-    .current-cover {
-        margin-top: 1rem;
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        position: relative;
-    }
-
-    .current-cover img {
-        width: 100%;
-        max-height: 300px;
-        object-fit: cover;
-    }
-
-    .current-cover-remove {
-        position: absolute;
-        top: 10px; right: 10px;
-        background: rgba(239, 68, 68, 0.9);
-        color: white;
-        border: none;
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: 600;
-    }
-
-    .hidden-input { display: none; }
-
-    .categories-table-card {
-        background: white;
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-    }
-
-    .table thead th {
-        background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-        color: white;
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 1px;
-        padding: 1.25rem 1rem;
-        border: none;
-    }
-
-    .table tbody tr:hover {
-        background: rgba(37, 99, 235, 0.03);
-    }
-
-    .category-cover-thumb {
-        width: 80px;
-        height: 80px;
-        object-fit: cover;
-        border-radius: 12px;
-        border: 2px solid var(--border-color);
-        transition: all 0.3s ease;
-    }
-
-    .category-cover-thumb:hover {
-        transform: scale(1.15);
-        border-color: var(--primary-color);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 4rem 2rem;
-        color: var(--text-secondary);
-    }
-
-    .empty-icon {
-        font-size: 5rem;
-        opacity: 0.2;
-        margin-bottom: 1.5rem;
-    }
-
-    .action-buttons {
-        display: flex;
-        gap: 1rem;
-        justify-content: flex-end;
-        padding-top: 2rem;
-        border-top: 2px solid var(--border-color);
-    }
-</style>
-
 <!-- Page Header -->
 <div class="page-header">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-            <h2 class="fw-bold mb-2" style="color: var(--primary-color);">
+            <h2 class="fw-bold mb-2 page-title">
                 <i class="fas fa-folder-open me-3"></i>Manage Categories
             </h2>
             <p class="text-muted mb-0">Organize your resources with beautiful categorized covers</p>
@@ -372,7 +165,7 @@ include __DIR__ . '/../includes/header.php';
 
                 <div class="mb-4">
                     <label class="form-label">
-                        <i class="fas fa-tag"></i> Category Name <span style="color:#ef4444;">*</span>
+                        <i class="fas fa-tag"></i> Category Name <span class="required">*</span>
                     </label>
                     <input type="text" name="name" class="form-control" required placeholder="e.g., Computer Science, Mathematics..."
                            value="<?= h($editCategory['name'] ?? '') ?>">
@@ -451,11 +244,10 @@ include __DIR__ . '/../includes/header.php';
                                 <tr>
                                     <td>
                                         <?php if (!empty($c['cover_image_path'])): ?>
-                                            <img src="<?= h(app_path($c['cover_image_path'])) ?>" alt="Cover" class="category-cover-thumb">
+                                    <img src="<?= h(app_path($c['cover_image_path'])) ?>" alt="Cover" class="category-cover-thumb">
                                         <?php else: ?>
-                                            <div class="category-cover-thumb d-flex align-items-center justify-content-center"
-                                                 style="background: linear-gradient(135deg, var(--primary-color), var(--accent-color));">
-                                                <i class="fas fa-folder text-white" style="font-size: 2rem;"></i>
+                                            <div class="category-cover-thumb category-cover-placeholder d-flex align-items-center justify-content-center">
+                                                <i class="fas fa-folder text-white category-cover-placeholder-icon"></i>
                                             </div>
                                         <?php endif; ?>
                                     </td>

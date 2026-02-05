@@ -21,8 +21,33 @@ if ($requestPath === '/login') {
     exit;
 }
 
+if ($requestPath === '/register') {
+    require __DIR__ . '/register.php';
+    exit;
+}
+
+if ($requestPath === '/verify-email') {
+    require __DIR__ . '/verify_email.php';
+    exit;
+}
+
+if ($requestPath === '/resend-verification') {
+    require __DIR__ . '/resend_verification.php';
+    exit;
+}
+
 if ($requestPath === '/logout') {
     require __DIR__ . '/logout.php';
+    exit;
+}
+
+if ($requestPath === '/submit') {
+    require __DIR__ . '/submit_resource.php';
+    exit;
+}
+
+if ($requestPath === '/my-submissions') {
+    require __DIR__ . '/my_submissions.php';
     exit;
 }
 
@@ -55,6 +80,33 @@ if (preg_match('#^/secure/([A-Fa-f0-9]+)/?$#', $requestPath, $matches)) {
     exit;
 }
 
+// User dashboard and bookmarks
+if ($requestPath === '/dashboard') {
+    require __DIR__ . '/dashboard.php';
+    exit;
+}
+
+if ($requestPath === '/bookmarks') {
+    require __DIR__ . '/bookmarks.php';
+    exit;
+}
+
+// API routes
+if ($requestPath === '/api/bookmark') {
+    require __DIR__ . '/api/bookmark.php';
+    exit;
+}
+
+if ($requestPath === '/api/progress') {
+    require __DIR__ . '/api/progress.php';
+    exit;
+}
+
+if ($requestPath === '/api/settings') {
+    require __DIR__ . '/api/settings.php';
+    exit;
+}
+
 // Admin routes
 if ($requestPath === '/admin' || $requestPath === '/admin/') {
     require __DIR__ . '/admin/index.php';
@@ -68,6 +120,16 @@ if ($requestPath === '/admin/dashboard') {
 
 if ($requestPath === '/admin/resources') {
     require __DIR__ . '/admin/resources.php';
+    exit;
+}
+
+if ($requestPath === '/admin/settings') {
+    require __DIR__ . '/admin/settings.php';
+    exit;
+}
+
+if ($requestPath === '/admin/moderation') {
+    require __DIR__ . '/admin/moderation.php';
     exit;
 }
 

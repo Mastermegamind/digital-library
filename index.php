@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+redirect_legacy_php('');
 require_login();
+
+$currentUser = current_user();
+$isAdmin = is_admin();
 
 // Get filter parameters
 $search = trim($_GET['q'] ?? '');
@@ -18,6 +22,10 @@ if (!in_array($perPage, [20, 50, 100])) {
 // Build WHERE clause
 $params = [];
 $whereConditions = [];
+
+if (!$isAdmin) {
+    $whereConditions[] = "r.status = 'approved'";
+}
 
 if ($search !== '') {
     $whereConditions[] = "(r.title LIKE :q OR r.description LIKE :q)";
@@ -80,10 +88,24 @@ $resources = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $categories = $pdo->query("SELECT * FROM categories ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 
 // Get resource type counts
-$typeCounts = $pdo->query("SELECT type, COUNT(*) as count FROM resources GROUP BY type")->fetchAll(PDO::FETCH_ASSOC);
+$typeCountsSql = "SELECT type, COUNT(*) as count FROM resources";
+if (!$isAdmin) {
+    $typeCountsSql .= " WHERE status = 'approved'";
+}
+$typeCountsSql .= " GROUP BY type";
+$typeCounts = $pdo->query($typeCountsSql)->fetchAll(PDO::FETCH_ASSOC);
 $typeCountMap = [];
 foreach ($typeCounts as $tc) {
     $typeCountMap[$tc['type']] = $tc['count'];
+}
+
+// Get user's bookmarks and progress for display
+$userBookmarks = [];
+$userProgress = [];
+$currentUser = current_user();
+if ($currentUser) {
+    $userBookmarks = get_user_bookmarks($currentUser['id']);
+    $userProgress = get_user_progress($currentUser['id']);
 }
 
 // Build query string for pagination links
@@ -104,300 +126,11 @@ $meta_title = $APP_NAME . ' - Library';
 $meta_description = 'Browse educational resources from ' . ($FULL_APP_NAME ?? $APP_NAME) . '.';
 include __DIR__ . '/includes/header.php';
 ?>
-
-<style>
-    .hero-section {
-        background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(59, 130, 246, 0.05));
-        border-radius: 20px;
-        padding: 3rem 2rem;
-        margin-bottom: 2rem;
-        border: 1px solid rgba(37, 99, 235, 0.1);
-    }
-
-    .search-container {
-        background: white;
-        border-radius: 16px;
-        padding: 1.5rem;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
-        margin-bottom: 2rem;
-    }
-
-    .search-input, .form-select {
-        border: 2px solid var(--border-color);
-        border-radius: 12px;
-        padding: 0.875rem 1.25rem;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-    }
-
-    .search-input:focus, .form-select:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
-    }
-
-    .filter-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 1rem;
-        border: 2px solid var(--border-color);
-        background: white;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.875rem;
-        transition: all 0.3s ease;
-        text-decoration: none;
-        color: var(--text-primary);
-    }
-
-    .filter-chip:hover, .filter-chip.active {
-        border-color: var(--primary-color);
-        background: var(--primary-color);
-        color: white;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-    }
-
-    .filter-chip .badge {
-        background: rgba(0, 0, 0, 0.1);
-        padding: 0.25rem 0.5rem;
-        border-radius: 10px;
-        font-size: 0.75rem;
-    }
-
-    .filter-chip.active .badge {
-        background: rgba(255, 255, 255, 0.3);
-    }
-
-    .toolbar {
-        background: white;
-        border-radius: 16px;
-        padding: 1.25rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-        margin-bottom: 2rem;
-    }
-
-    .results-info {
-        font-weight: 600;
-        color: var(--text-secondary);
-    }
-
-    .resource-card {
-        position: relative;
-        background: white;
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        height: 100%;
-    }
-
-    .resource-card:hover {
-        transform: translateY(-10px);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
-    }
-
-    .resource-image-wrapper {
-        position: relative;
-        height: 280px;
-        overflow: hidden;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-
-    .resource-image {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        transition: transform 0.6s ease;
-    }
-
-    .resource-card:hover .resource-image {
-        transform: scale(1.1);
-    }
-
-    .resource-badge {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(10px);
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-weight: 700;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .resource-body {
-        padding: 1.5rem;
-    }
-
-    .resource-title {
-        font-size: 1.125rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin-bottom: 0.5rem;
-        line-height: 1.4;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-
-    .resource-category {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-        background: var(--light-bg);
-        padding: 0.375rem 0.875rem;
-        border-radius: 8px;
-        margin-bottom: 0.75rem;
-    }
-
-    .resource-description {
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-        line-height: 1.6;
-        margin-bottom: 1rem;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-
-    .resource-actions {
-        display: flex;
-        gap: 0.5rem;
-    }
-
-    .pagination-container {
-        background: white;
-        border-radius: 16px;
-        padding: 1.5rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-        margin-top: 3rem;
-    }
-
-    .pagination {
-        margin: 0;
-    }
-
-    .page-link {
-        border: 2px solid var(--border-color);
-        color: var(--text-primary);
-        font-weight: 600;
-        padding: 0.625rem 1rem;
-        margin: 0 0.25rem;
-        border-radius: 10px;
-        transition: all 0.3s ease;
-    }
-
-    .page-link:hover {
-        background: var(--primary-color);
-        border-color: var(--primary-color);
-        color: white;
-        transform: translateY(-2px);
-    }
-
-    .page-item.active .page-link {
-        background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-        border-color: var(--primary-color);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-    }
-
-    .page-item.disabled .page-link {
-        background: var(--light-bg);
-        border-color: var(--border-color);
-        opacity: 0.5;
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 4rem 2rem;
-    }
-
-    .empty-icon {
-        font-size: 5rem;
-        color: var(--text-secondary);
-        opacity: 0.3;
-        margin-bottom: 1.5rem;
-    }
-
-    .stat-card {
-        background: white;
-        border-radius: 16px;
-        padding: 1.5rem;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-        text-align: center;
-        transition: all 0.3s ease;
-    }
-
-    .stat-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
-    }
-
-    .stat-icon {
-        width: 60px;
-        height: 60px;
-        margin: 0 auto 1rem;
-        background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.75rem;
-        color: white;
-    }
-
-    .stat-number {
-        font-size: 2rem;
-        font-weight: 800;
-        color: var(--text-primary);
-        margin-bottom: 0.25rem;
-    }
-
-    .stat-label {
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-        font-weight: 600;
-    }
-
-    .zoom-modal .modal-content {
-        background: transparent;
-        border: none;
-    }
-
-    .zoom-modal img {
-        border-radius: 16px;
-        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
-    }
-
-    @media (max-width: 768px) {
-        .hero-section {
-            padding: 2rem 1rem;
-        }
-        
-        .resource-image-wrapper {
-            height: 220px;
-        }
-
-        .toolbar {
-            flex-direction: column;
-            gap: 1rem;
-        }
-    }
-</style>
-
 <!-- Hero Section -->
 <div class="hero-section">
     <div class="row align-items-center">
         <div class="col-lg-8">
-            <h1 class="display-4 fw-bold mb-3" style="color: var(--primary-color);">
+            <h1 class="display-4 fw-bold mb-3 page-title">
                 <i class="fas fa-book-reader me-3"></i>Welcome to CONS-UNTH E-Library
             </h1>
             <p class="lead text-muted mb-0">
@@ -427,7 +160,7 @@ include __DIR__ . '/includes/header.php';
     </div>
     <div class="col-6 col-md-3">
         <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+            <div class="stat-icon stat-icon-success">
                 <i class="fas fa-folder-open"></i>
             </div>
             <div class="stat-number"><?= count($categories) ?></div>
@@ -436,7 +169,7 @@ include __DIR__ . '/includes/header.php';
     </div>
     <div class="col-6 col-md-3">
         <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+            <div class="stat-icon stat-icon-warning">
                 <i class="fas fa-file-pdf"></i>
             </div>
             <div class="stat-number"><?= $typeCountMap['pdf'] ?? 0 ?></div>
@@ -445,7 +178,7 @@ include __DIR__ . '/includes/header.php';
     </div>
     <div class="col-6 col-md-3">
         <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+            <div class="stat-icon stat-icon-purple">
                 <i class="fas fa-file-alt"></i>
             </div>
             <div class="stat-number"><?= $typeCountMap['document'] ?? 0 ?></div>
@@ -460,10 +193,10 @@ include __DIR__ . '/includes/header.php';
         <div class="row g-3">
             <div class="col-12 col-lg-6">
                 <div class="input-group input-group-lg">
-                    <span class="input-group-text bg-white border-end-0" style="border-radius: 12px 0 0 12px; border: 2px solid var(--border-color); border-right: none;">
+                    <span class="input-group-text bg-white border-end-0 search-input-addon">
                         <i class="fas fa-search text-primary"></i>
                     </span>
-                    <input type="text" name="q" class="search-input border-start-0" placeholder="Search resources by title or description..." value="<?= h($search) ?>" style="border-radius: 0 12px 12px 0;">
+                    <input type="text" name="q" class="search-input border-start-0 search-input-field" placeholder="Search resources by title or description..." value="<?= h($search) ?>">
                 </div>
             </div>
             <div class="col-6 col-lg-3">
@@ -564,7 +297,7 @@ include __DIR__ . '/includes/header.php';
 <?php else: ?>
     <div class="row g-4 mb-4">
         <?php foreach ($resources as $r): ?>
-            <?php 
+            <?php
                 $cover = !empty($r['cover_image_path']) ? app_path($r['cover_image_path']) : 'https://via.placeholder.com/400x280/667eea/ffffff?text=' . urlencode($r['title']);
                 $typeColors = [
                     'pdf' => 'danger',
@@ -574,37 +307,55 @@ include __DIR__ . '/includes/header.php';
                     'image' => 'success'
                 ];
                 $badgeColor = $typeColors[$r['type']] ?? 'secondary';
+                $isBookmarked = in_array($r['id'], $userBookmarks);
+                $progress = $userProgress[$r['id']] ?? null;
+                $progressPercent = $progress ? (float)$progress['percent'] : 0;
             ?>
             <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div class="resource-card">
                     <div class="resource-image-wrapper">
-                        <img src="<?= h($cover) ?>" class="resource-image" alt="<?= h($r['title']) ?>"
+                        <img src="<?= h($cover) ?>" class="resource-image resource-zoomable" alt="<?= h($r['title']) ?>" loading="lazy"
                              data-bs-toggle="modal" data-bs-target="#coverModal<?= $r['id'] ?>"
-                             style="cursor: zoom-in;">
+                        >
                         <span class="resource-badge text-<?= $badgeColor ?>">
                             <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : ($r['type'] === 'link' ? 'link' : 'file-alt')) ?> me-1"></i>
                             <?= strtoupper($r['type']) ?>
                         </span>
+                        <?php if ($progressPercent > 0): ?>
+                            <div class="progress-indicator">
+                                <div class="progress-indicator-bar" style="width: <?= min(100, $progressPercent) ?>%"></div>
+                            </div>
+                            <span class="progress-badge">
+                                <i class="fas fa-book-reader"></i>
+                                <?= round($progressPercent) ?>%
+                            </span>
+                        <?php endif; ?>
                     </div>
-                    
+
                     <div class="resource-body">
                         <h5 class="resource-title"><?= h($r['title']) ?></h5>
-                        
+
                         <?php if ($r['category_name']): ?>
                             <span class="resource-category">
                                 <i class="fas fa-folder"></i>
                                 <?= h($r['category_name']) ?>
                             </span>
                         <?php endif; ?>
-                        
+
                         <?php if (!empty($r['description'])): ?>
                             <p class="resource-description"><?= h($r['description']) ?></p>
                         <?php endif; ?>
-                        
+
                         <div class="resource-actions">
                             <a href="<?= h(app_path('viewer/' . $r['id'])) ?>" class="btn btn-primary flex-grow-1">
-                                <i class="fas fa-eye me-2"></i>Open
+                                <i class="fas fa-eye me-2"></i><?= $progressPercent > 0 ? 'Continue' : 'Open' ?>
                             </a>
+                            <button class="bookmark-btn <?= $isBookmarked ? 'bookmarked' : '' ?>"
+                                    data-resource-id="<?= $r['id'] ?>"
+                                    data-bookmarked="<?= $isBookmarked ? '1' : '0' ?>"
+                                    title="<?= $isBookmarked ? 'Remove bookmark' : 'Add bookmark' ?>">
+                                <i class="<?= $isBookmarked ? 'fas' : 'far' ?> fa-bookmark"></i>
+                            </button>
                             <?php if (is_admin()): ?>
                                 <a href="<?= h(app_path('admin/resource/edit/' . $r['id'])) ?>" class="btn btn-outline-secondary">
                                     <i class="fas fa-edit"></i>
@@ -619,7 +370,7 @@ include __DIR__ . '/includes/header.php';
             <div class="modal fade zoom-modal" id="coverModal<?= $r['id'] ?>" tabindex="-1">
                 <div class="modal-dialog modal-dialog-centered modal-lg">
                     <div class="modal-content">
-                        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" style="z-index: 10;"></button>
+                        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 modal-close-overlay" data-bs-dismiss="modal"></button>
                         <img src="<?= h($cover) ?>" class="img-fluid" alt="<?= h($r['title']) ?>">
                     </div>
                 </div>

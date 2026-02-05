@@ -14,16 +14,16 @@
                     Your gateway to knowledge and learning. Access thousands of educational resources anytime, anywhere.
                 </p>
                 <div class="d-flex gap-2">
-                    <a href="#" class="btn btn-sm btn-outline-light rounded-circle" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                    <a href="#" class="btn btn-sm btn-outline-light rounded-circle footer-social-link">
                         <i class="fab fa-facebook-f"></i>
                     </a>
-                    <a href="#" class="btn btn-sm btn-outline-light rounded-circle" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                    <a href="#" class="btn btn-sm btn-outline-light rounded-circle footer-social-link">
                         <i class="fab fa-twitter"></i>
                     </a>
-                    <a href="#" class="btn btn-sm btn-outline-light rounded-circle" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                    <a href="#" class="btn btn-sm btn-outline-light rounded-circle footer-social-link">
                         <i class="fab fa-instagram"></i>
                     </a>
-                    <a href="#" class="btn btn-sm btn-outline-light rounded-circle" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                    <a href="#" class="btn btn-sm btn-outline-light rounded-circle footer-social-link">
                         <i class="fab fa-linkedin-in"></i>
                     </a>
                 </div>
@@ -35,24 +35,24 @@
                 <ul class="list-unstyled">
                     <li class="mb-2">
                         <a href="<?= h(app_path('')) ?>" class="text-white-50 text-decoration-none hover-link">
-                            <i class="fas fa-chevron-right me-2" style="font-size: 0.75rem;"></i>Library
+                            <i class="fas fa-chevron-right me-2 footer-link-icon"></i>Library
                         </a>
                     </li>
                     <?php if (is_admin()): ?>
                     <li class="mb-2">
                         <a href="<?= h(app_path('admin')) ?>" class="text-white-50 text-decoration-none hover-link">
-                            <i class="fas fa-chevron-right me-2" style="font-size: 0.75rem;"></i>Admin Panel
+                            <i class="fas fa-chevron-right me-2 footer-link-icon"></i>Admin Panel
                         </a>
                     </li>
                     <?php endif; ?>
                     <li class="mb-2">
                         <a href="#" class="text-white-50 text-decoration-none hover-link">
-                            <i class="fas fa-chevron-right me-2" style="font-size: 0.75rem;"></i>About Us
+                            <i class="fas fa-chevron-right me-2 footer-link-icon"></i>About Us
                         </a>
                     </li>
                     <li class="mb-2">
                         <a href="#" class="text-white-50 text-decoration-none hover-link">
-                            <i class="fas fa-chevron-right me-2" style="font-size: 0.75rem;"></i>Contact
+                            <i class="fas fa-chevron-right me-2 footer-link-icon"></i>Contact
                         </a>
                     </li>
                 </ul>
@@ -64,27 +64,27 @@
                 <ul class="list-unstyled">
                     <li class="mb-2">
                         <a href="#" class="text-white-50 text-decoration-none hover-link">
-                            <i class="fas fa-chevron-right me-2" style="font-size: 0.75rem;"></i>Help Center
+                            <i class="fas fa-chevron-right me-2 footer-link-icon"></i>Help Center
                         </a>
                     </li>
                     <li class="mb-2">
                         <a href="#" class="text-white-50 text-decoration-none hover-link">
-                            <i class="fas fa-chevron-right me-2" style="font-size: 0.75rem;"></i>User Guide
+                            <i class="fas fa-chevron-right me-2 footer-link-icon"></i>User Guide
                         </a>
                     </li>
                     <li class="mb-2">
                         <a href="#" class="text-white-50 text-decoration-none hover-link">
-                            <i class="fas fa-chevron-right me-2" style="font-size: 0.75rem;"></i>FAQs
+                            <i class="fas fa-chevron-right me-2 footer-link-icon"></i>FAQs
                         </a>
                     </li>
                     <li class="mb-2">
                         <a href="#" class="text-white-50 text-decoration-none hover-link">
-                            <i class="fas fa-chevron-right me-2" style="font-size: 0.75rem;"></i>Privacy Policy
+                            <i class="fas fa-chevron-right me-2 footer-link-icon"></i>Privacy Policy
                         </a>
                     </li>
                     <li class="mb-2">
                         <a href="#" class="text-white-50 text-decoration-none hover-link">
-                            <i class="fas fa-chevron-right me-2" style="font-size: 0.75rem;"></i>Terms of Service
+                            <i class="fas fa-chevron-right me-2 footer-link-icon"></i>Terms of Service
                         </a>
                     </li>
                 </ul>
@@ -136,155 +136,16 @@
     </div>
 </footer>
 
-<style>
-    .hover-link {
-        transition: all 0.3s ease;
-    }
-    
-    .hover-link:hover {
-        color: white !important;
-        padding-left: 5px;
-    }
-
-    footer {
-        background: linear-gradient(135deg, #1e293b, #334155);
-        position: relative;
-        overflow: hidden;
-    }
-
-    footer::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, #667eea, #764ba2, #667eea);
-        background-size: 200% 100%;
-        animation: gradient 3s ease infinite;
-    }
-
-    @keyframes gradient {
-        0%, 100% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-    }
-
-    @media (max-width: 1366px), (max-height: 820px) {
-        .hero-section,
-        .page-header,
-        .welcome-card {
-            padding: clamp(1rem, 2.2vw, 1.75rem) !important;
-            margin-bottom: 1rem !important;
-        }
-
-        .search-container,
-        .toolbar,
-        .quick-stats,
-        .stats-bar,
-        .pagination-container,
-        .resources-table-card,
-        .form-card,
-        .quick-actions-card,
-        .recent-resources-card,
-        .section-card,
-        .stat-card {
-            padding: clamp(0.85rem, 1.8vw, 1.35rem) !important;
-        }
-
-        .resource-body,
-        .card .card-body {
-            padding: clamp(0.8rem, 1.6vw, 1.2rem) !important;
-        }
-
-        .display-4 {
-            font-size: clamp(1.65rem, 3vw, 2.35rem) !important;
-        }
-
-        .display-5 {
-            font-size: clamp(1.35rem, 2.4vw, 2rem) !important;
-        }
-
-        .section-title,
-        .resource-title {
-            font-size: clamp(1rem, 1.9vw, 1.25rem) !important;
-        }
-
-        .resource-image-wrapper,
-        .cover-img {
-            height: clamp(180px, 30vh, 240px) !important;
-        }
-
-        .resource-cover-thumb,
-        .resource-cover-mini {
-            width: 58px !important;
-            height: 58px !important;
-        }
-
-        .section-icon,
-        .stat-icon,
-        .role-icon {
-            width: 56px !important;
-            height: 56px !important;
-            font-size: 1.45rem !important;
-        }
-
-        .stat-number,
-        .stat-value {
-            font-size: clamp(1.35rem, 2.2vw, 1.85rem) !important;
-        }
-
-        .table thead th,
-        .table tbody td {
-            padding: 0.7rem 0.65rem !important;
-        }
-
-        .btn,
-        .btn-action,
-        .quick-action-btn {
-            padding: 0.55rem 0.9rem !important;
-        }
-
-        .form-control,
-        .form-select {
-            padding: 0.65rem 0.85rem !important;
-            font-size: 0.95rem !important;
-        }
-
-        .avatar-preview {
-            width: 160px !important;
-            height: 160px !important;
-        }
-
-        .avatar-upload-icon {
-            font-size: 3rem !important;
-        }
-    }
-
-    @media (max-width: 1024px) {
-        .role-selector {
-            grid-template-columns: 1fr 1fr !important;
-        }
-
-        .action-buttons {
-            flex-wrap: wrap;
-        }
-    }
-
-    @media (max-width: 768px) {
-        .role-selector {
-            grid-template-columns: 1fr !important;
-        }
-
-        .action-buttons {
-            flex-direction: column !important;
-            align-items: stretch !important;
-        }
-    }
-</style>
-
 <script src="<?php echo h(app_path('assets/js/bootstrap.bundle.min.js')); ?>"></script>
 
-<!-- Smooth Scroll -->
+<!-- App Configuration -->
+<script>
+    const appPath = '<?= h(app_base_path_prefix()) ?>/';
+    const csrfToken = '<?= h(get_csrf_token()) ?>';
+    const isLoggedIn = <?= is_logged_in() ? 'true' : 'false' ?>;
+</script>
+
+<!-- Core App JavaScript -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Auto-hide alerts after 5 seconds
@@ -308,7 +169,190 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // =============================================
+    // DARK MODE FUNCTIONALITY
+    // =============================================
+    const DARK_MODE_KEY = 'darkMode';
+    const toggle = document.getElementById('darkModeToggle');
+    const icon = document.getElementById('darkModeIcon');
+
+    function setTheme(dark) {
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        localStorage.setItem(DARK_MODE_KEY, dark ? 'true' : 'false');
+
+        if (icon) {
+            icon.className = dark ? 'fas fa-sun' : 'fas fa-moon';
+        }
+
+        // Sync with server if logged in
+        if (isLoggedIn) {
+            fetch(appPath + 'api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `csrf_token=${encodeURIComponent(csrfToken)}&dark_mode=${dark ? 1 : 0}`
+            }).catch(() => {});
+        }
+    }
+
+    // Initialize theme from localStorage (overrides server preference for immediate response)
+    const savedTheme = localStorage.getItem(DARK_MODE_KEY);
+    if (savedTheme !== null) {
+        const isDark = savedTheme === 'true';
+        if (isDark !== (document.documentElement.getAttribute('data-theme') === 'dark')) {
+            setTheme(isDark);
+        }
+    }
+
+    // Toggle handler
+    if (toggle) {
+        toggle.addEventListener('click', () => {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            setTheme(!isDark);
+        });
+    }
+
+    // Listen for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (localStorage.getItem(DARK_MODE_KEY) === null) {
+            setTheme(e.matches);
+        }
+    });
+
+    // =============================================
+    // BOOKMARK FUNCTIONALITY
+    // =============================================
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.bookmark-btn');
+        if (!btn || !isLoggedIn) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const resourceId = btn.dataset.resourceId;
+        const isBookmarked = btn.dataset.bookmarked === '1';
+
+        // Optimistic UI update
+        btn.classList.toggle('bookmarked', !isBookmarked);
+        btn.dataset.bookmarked = isBookmarked ? '0' : '1';
+        const iconEl = btn.querySelector('i');
+        if (iconEl) {
+            iconEl.className = isBookmarked ? 'far fa-bookmark' : 'fas fa-bookmark';
+        }
+
+        // Send request
+        fetch(appPath + 'api/bookmark', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `csrf_token=${encodeURIComponent(csrfToken)}&resource_id=${resourceId}`
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                // Revert on error
+                btn.classList.toggle('bookmarked', isBookmarked);
+                btn.dataset.bookmarked = isBookmarked ? '1' : '0';
+                if (iconEl) {
+                    iconEl.className = isBookmarked ? 'fas fa-bookmark' : 'far fa-bookmark';
+                }
+                showToast(data.error, 'error');
+            } else {
+                showToast(data.message || (data.bookmarked ? 'Bookmark added' : 'Bookmark removed'), 'success');
+            }
+        })
+        .catch(() => {
+            // Revert on error
+            btn.classList.toggle('bookmarked', isBookmarked);
+            btn.dataset.bookmarked = isBookmarked ? '1' : '0';
+            if (iconEl) {
+                iconEl.className = isBookmarked ? 'fas fa-bookmark' : 'far fa-bookmark';
+            }
+            showToast('Failed to update bookmark', 'error');
+        });
+    });
+
+    // =============================================
+    // LAZY LOADING WITH INTERSECTION OBSERVER
+    // =============================================
+    if ('IntersectionObserver' in window) {
+        const imageObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    if (img.dataset.src) {
+                        img.src = img.dataset.src;
+                        img.removeAttribute('data-src');
+                    }
+                    img.classList.remove('lazy-image');
+                    observer.unobserve(img);
+                }
+            });
+        }, {
+            rootMargin: '50px 0px',
+            threshold: 0.01
+        });
+
+        document.querySelectorAll('img[data-src]').forEach(img => {
+            img.classList.add('lazy-image');
+            imageObserver.observe(img);
+        });
+    }
 });
+
+// =============================================
+// TOAST NOTIFICATION HELPER
+// =============================================
+function showToast(message, type = 'success') {
+    let container = document.querySelector('.toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'toast-container position-fixed top-0 end-0 p-3';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${type === 'success' ? 'success' : 'danger'} border-0 show`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+
+    container.appendChild(toast);
+
+    const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 3000 });
+    bsToast.show();
+
+    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+}
+
+// =============================================
+// PROGRESS TRACKING HELPER (used in viewer.php)
+// =============================================
+function saveReadingProgress(resourceId, position, percent, totalPages = null) {
+    if (!isLoggedIn) return Promise.resolve();
+
+    const body = new URLSearchParams({
+        csrf_token: csrfToken,
+        resource_id: resourceId,
+        position: position,
+        percent: percent
+    });
+    if (totalPages !== null) {
+        body.append('total_pages', totalPages);
+    }
+
+    return fetch(appPath + 'api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+    }).then(res => res.json()).catch(() => {});
+}
 </script>
 
 </body>

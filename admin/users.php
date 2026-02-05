@@ -1,49 +1,66 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+redirect_legacy_php('admin/users');
 require_admin();
 
+$csrf = get_csrf_token();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $token = $_POST['csrf_token'] ?? '';
+    if (!verify_csrf_token($token)) {
+        flash_message('error', 'Invalid session token.');
+        header('Location: ' . app_path('admin/users'));
+        exit;
+    }
+
+    $action = $_POST['action'] ?? '';
+    $id = (int)($_POST['id'] ?? 0);
+    if ($id > 0) {
+        if ($id === (int)current_user()['id'] && in_array($action, ['disable', 'reject'], true)) {
+            flash_message('error', 'You cannot disable your own account.');
+            header('Location: ' . app_path('admin/users'));
+            exit;
+        }
+
+        if (in_array($action, ['approve', 'activate', 'reject', 'disable'], true)) {
+            $status = match ($action) {
+                'approve', 'activate' => 'active',
+                'reject' => 'rejected',
+                'disable' => 'disabled',
+                default => 'active',
+            };
+
+            $stmt = $pdo->prepare("UPDATE users SET status = :status, approved_by = :admin_id, approved_at = CURRENT_TIMESTAMP WHERE id = :id");
+            $stmt->execute([
+                ':status' => $status,
+                ':admin_id' => current_user()['id'],
+                ':id' => $id,
+            ]);
+
+            flash_message('success', 'User status updated.');
+            header('Location: ' . app_path('admin/users'));
+            exit;
+        }
+    }
+}
+
 $stmt = $pdo->query("
-    SELECT u.id, u.name, u.email, u.role, u.created_at, u.profile_image_path,
+    SELECT u.id, u.name, u.email, u.role, u.created_at, u.profile_image_path, u.status, u.email_verified_at,
            up.reg_no, up.enrollment_year, up.staff_id
     FROM users u
     LEFT JOIN user_profiles up ON u.id = up.user_id
     ORDER BY u.created_at DESC
 ");
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-$csrf = get_csrf_token();
 
 $meta_title = 'Manage Users - Admin | ' . $APP_NAME;
 $meta_description = 'View and manage user accounts in the ' . $APP_NAME . ' admin panel.';
 include __DIR__ . '/../includes/header.php';
 ?>
-
-<style>
-    .page-header { background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(59, 130, 246, 0.05)); border-radius: 20px; padding: 2rem; margin-bottom: 2rem; border: 1px solid rgba(37, 99, 235, 0.1); }
-    .users-table-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07); }
-    .table thead th { background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 1px; padding: 1.25rem 1rem; border: none; }
-    .table tbody td { padding: 1.25rem 1rem; vertical-align: middle; border-bottom: 1px solid var(--border-color); }
-    .table tbody tr:hover { background: rgba(37, 99, 235, 0.03); }
-    .user-avatar { width: 60px; height: 60px; object-fit: cover; border-radius: 50%; border: 3px solid var(--border-color); transition: all 0.3s ease; }
-    .user-avatar:hover { transform: scale(1.2); border-color: var(--primary-color); box-shadow: 0 8px 16px rgba(37, 99, 235, 0.3); }
-    .user-initial-avatar { width: 60px; height: 60px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.5rem; border: 3px solid var(--border-color); }
-    .user-name { font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem; }
-    .user-email { font-size: 0.875rem; color: var(--text-secondary); }
-    .role-badge { padding: 0.375rem 0.875rem; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }
-    .role-admin { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
-    .role-student { background: rgba(37, 99, 235, 0.1); color: #2563eb; }
-    .role-staff { background: rgba(34, 197, 94, 0.1); color: #16a34a; }
-    .btn-action { padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.875rem; transition: all 0.3s ease; margin: 0 0.125rem; }
-    .btn-action:hover { transform: translateY(-2px); }
-    .stats-bar { background: white; border-radius: 12px; padding: 1rem 1.5rem; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); margin-bottom: 1.5rem; }
-    .stat-item { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 8px; background: rgba(37, 99, 235, 0.05); }
-    .stat-number { font-weight: 700; color: var(--primary-color); font-size: 1.25rem; }
-    .empty-state { text-align: center; padding: 4rem 2rem; }
-</style>
-
 <div class="page-header">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-            <h2 class="fw-bold mb-2" style="color: var(--primary-color);">
+            <h2 class="fw-bold mb-2 page-title">
                 <i class="fas fa-users me-3"></i>Manage Users
             </h2>
             <p class="text-muted mb-0">View and manage all user accounts in the system</p>
@@ -63,9 +80,9 @@ $staffCount = count(array_filter($users, fn($u) => $u['role'] === 'staff'));
 <div class="stats-bar">
     <div class="d-flex flex-wrap gap-3 justify-content-center">
         <div class="stat-item"><i class="fas fa-users text-primary"></i><div><div class="stat-number"><?= count($users) ?></div><div class="stat-label">Total</div></div></div>
-        <div class="stat-item"><i class="fas fa-user-shield" style="color: #dc2626;"></i><div><div class="stat-number"><?= $adminCount ?></div><div class="stat-label">Admins</div></div></div>
-        <div class="stat-item"><i class="fas fa-user-graduate" style="color: #2563eb;"></i><div><div class="stat-number"><?= $studentCount ?></div><div class="stat-label">Students</div></div></div>
-        <div class="stat-item"><i class="fas fa-chalkboard-teacher" style="color: #16a34a;"></i><div><div class="stat-number"><?= $staffCount ?></div><div class="stat-label">Staff</div></div></div>
+        <div class="stat-item"><i class="fas fa-user-shield icon-danger"></i><div><div class="stat-number"><?= $adminCount ?></div><div class="stat-label">Admins</div></div></div>
+        <div class="stat-item"><i class="fas fa-user-graduate icon-primary"></i><div><div class="stat-number"><?= $studentCount ?></div><div class="stat-label">Students</div></div></div>
+        <div class="stat-item"><i class="fas fa-chalkboard-teacher icon-success"></i><div><div class="stat-number"><?= $staffCount ?></div><div class="stat-label">Staff</div></div></div>
     </div>
 </div>
 
@@ -81,11 +98,12 @@ $staffCount = count(array_filter($users, fn($u) => $u['role'] === 'staff'));
             <table class="table">
                 <thead>
                     <tr>
-                        <th style="width: 90px;">Avatar</th>
+                        <th class="table-col-avatar">Avatar</th>
                         <th>User Information</th>
-                        <th style="width: 120px;">Role</th>
-                        <th style="width: 160px;">Joined</th>
-                        <th style="width: 220px;" class="text-end">Actions</th>
+                        <th class="table-col-role">Role</th>
+                        <th>Status</th>
+                        <th class="table-col-joined">Joined</th>
+                        <th class="table-col-actions-sm text-end">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -113,9 +131,54 @@ $staffCount = count(array_filter($users, fn($u) => $u['role'] === 'staff'));
                                     <?= h(ucfirst($u['role'])) ?>
                                 </span>
                             </td>
+                            <td>
+                                <?php $status = $u['status'] ?? 'active'; ?>
+                                <span class="status-badge status-<?= h($status) ?>">
+                                    <?= h(ucwords(str_replace('_', ' ', $status))) ?>
+                                </span>
+                                <?php if (empty($u['email_verified_at'])): ?>
+                                    <div class="text-muted small mt-1">Email not verified</div>
+                                <?php endif; ?>
+                            </td>
                             <td><small class="text-muted"><i class="fas fa-calendar-alt me-1"></i><?= date('M d, Y', strtotime($u['created_at'])) ?></small></td>
                             <td class="text-end">
                                 <a href="<?= h(app_path('admin/user/edit/' . $u['id'])) ?>" class="btn btn-sm btn-outline-secondary btn-action"><i class="fas fa-edit"></i></a>
+                                <?php if (($u['status'] ?? 'active') === 'pending'): ?>
+                                    <form method="post" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                                        <input type="hidden" name="action" value="approve">
+                                        <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-success btn-action" title="Approve">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    </form>
+                                    <form method="post" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                                        <input type="hidden" name="action" value="reject">
+                                        <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger btn-action" title="Reject">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </form>
+                                <?php elseif (($u['status'] ?? 'active') === 'active'): ?>
+                                    <form method="post" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                                        <input type="hidden" name="action" value="disable">
+                                        <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-warning btn-action" title="Disable">
+                                            <i class="fas fa-ban"></i>
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <form method="post" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                                        <input type="hidden" name="action" value="activate">
+                                        <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-success btn-action" title="Activate">
+                                            <i class="fas fa-check-circle"></i>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
                                 <form method="post" action="<?= h(app_path('admin/user/delete/' . $u['id'])) ?>" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
                                     <button type="submit" class="btn btn-sm btn-danger btn-action"

@@ -1,6 +1,7 @@
 <?php
 // includes/functions.php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/mailer.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -49,6 +50,12 @@ function base_url(): string {
     return $scheme . '://' . $host . $scriptDir;
 }
 
+function app_url(string $relative = ''): string {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    return $scheme . '://' . $host . app_path($relative);
+}
+
 function app_base_path_prefix(): string {
     $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
     if ($scriptDir === '.' || $scriptDir === '\\') {
@@ -75,6 +82,41 @@ function app_path(string $relative = ''): string {
         return '/' . $relative;
     }
     return rtrim($base, '/') . '/' . $relative;
+}
+
+function is_legacy_php_request(): bool {
+    if (PHP_SAPI === 'cli') {
+        return false;
+    }
+    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    if (!in_array($method, ['GET', 'HEAD'], true)) {
+        return false;
+    }
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
+    if ($path === '') {
+        return false;
+    }
+    return str_ends_with(strtolower($path), '.php');
+}
+
+function redirect_legacy_php(string $cleanPath, array $queryOverrides = [], bool $preserveQuery = true): void {
+    if (!is_legacy_php_request() || headers_sent()) {
+        return;
+    }
+    $target = app_url($cleanPath);
+    $query = $preserveQuery ? $_GET : [];
+    foreach ($queryOverrides as $key => $value) {
+        if ($value === null) {
+            unset($query[$key]);
+            continue;
+        }
+        $query[$key] = $value;
+    }
+    if (!empty($query)) {
+        $target .= '?' . http_build_query($query);
+    }
+    header('Location: ' . $target, true, 301);
+    exit;
 }
 
 function h(?string $str): string {
@@ -363,8 +405,7 @@ function resize_image_in_place(string $filePath, int $maxWidth, int $maxHeight, 
     }
 
     if (!imagecopyresampled($dstImage, $srcImage, 0, 0, 0, 0, $newWidth, $newHeight, $srcWidth, $srcHeight)) {
-        imagedestroy($srcImage);
-        imagedestroy($dstImage);
+        unset($srcImage, $dstImage);
         return false;
     }
 
@@ -375,8 +416,7 @@ function resize_image_in_place(string $filePath, int $maxWidth, int $maxHeight, 
         default => false,
     };
 
-    imagedestroy($srcImage);
-    imagedestroy($dstImage);
+    unset($srcImage, $dstImage);
 
     return (bool)$result;
 }
@@ -520,4 +560,415 @@ function get_resource_token(string $token): ?array {
 
 function revoke_resource_token(string $token): void {
     unset($_SESSION['resource_tokens'][$token]);
+}
+
+// =============================================
+// BOOKMARK HELPER FUNCTIONS
+// =============================================
+
+function get_user_bookmarks(int $userId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT resource_id FROM user_bookmarks WHERE user_id = :user_id");
+    $stmt->execute([':user_id' => $userId]);
+    return array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'resource_id');
+}
+
+function is_bookmarked(int $userId, int $resourceId): bool {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT 1 FROM user_bookmarks WHERE user_id = :user_id AND resource_id = :resource_id LIMIT 1");
+    $stmt->execute([':user_id' => $userId, ':resource_id' => $resourceId]);
+    return (bool)$stmt->fetch();
+}
+
+function toggle_bookmark(int $userId, int $resourceId): bool {
+    global $pdo;
+    if (is_bookmarked($userId, $resourceId)) {
+        $stmt = $pdo->prepare("DELETE FROM user_bookmarks WHERE user_id = :user_id AND resource_id = :resource_id");
+        $stmt->execute([':user_id' => $userId, ':resource_id' => $resourceId]);
+        log_info('Bookmark removed', ['resource_id' => $resourceId]);
+        return false;
+    } else {
+        $stmt = $pdo->prepare("INSERT INTO user_bookmarks (user_id, resource_id) VALUES (:user_id, :resource_id)");
+        $stmt->execute([':user_id' => $userId, ':resource_id' => $resourceId]);
+        log_info('Bookmark added', ['resource_id' => $resourceId]);
+        return true;
+    }
+}
+
+// =============================================
+// READING PROGRESS HELPER FUNCTIONS
+// =============================================
+
+function get_user_progress(int $userId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT resource_id, progress_percent, last_position FROM reading_progress WHERE user_id = :user_id");
+    $stmt->execute([':user_id' => $userId]);
+    $result = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $result[$row['resource_id']] = [
+            'percent' => (float)$row['progress_percent'],
+            'position' => (int)$row['last_position']
+        ];
+    }
+    return $result;
+}
+
+function get_resource_progress(int $userId, int $resourceId): ?array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT * FROM reading_progress WHERE user_id = :user_id AND resource_id = :resource_id LIMIT 1");
+    $stmt->execute([':user_id' => $userId, ':resource_id' => $resourceId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function update_reading_progress(int $userId, int $resourceId, int $position, float $percent, ?int $totalPages = null): void {
+    global $pdo;
+
+    // Clamp percent between 0 and 100
+    $percent = max(0, min(100, $percent));
+
+    $stmt = $pdo->prepare("SELECT id FROM reading_progress WHERE user_id = :user_id AND resource_id = :resource_id LIMIT 1");
+    $stmt->execute([':user_id' => $userId, ':resource_id' => $resourceId]);
+    $existing = $stmt->fetch();
+
+    if ($existing) {
+        $sql = "UPDATE reading_progress SET last_position = :position, progress_percent = :percent, last_viewed_at = CURRENT_TIMESTAMP";
+        $params = [':position' => $position, ':percent' => $percent, ':user_id' => $userId, ':resource_id' => $resourceId];
+        if ($totalPages !== null) {
+            $sql .= ", total_pages = :total_pages";
+            $params[':total_pages'] = $totalPages;
+        }
+        $sql .= " WHERE user_id = :user_id AND resource_id = :resource_id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+    } else {
+        $stmt = $pdo->prepare("INSERT INTO reading_progress (user_id, resource_id, last_position, progress_percent, total_pages) VALUES (:user_id, :resource_id, :position, :percent, :total_pages)");
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':resource_id' => $resourceId,
+            ':position' => $position,
+            ':percent' => $percent,
+            ':total_pages' => $totalPages
+        ]);
+    }
+
+    log_debug('Reading progress updated', ['resource_id' => $resourceId, 'position' => $position, 'percent' => $percent]);
+}
+
+function record_resource_view(int $userId, int $resourceId): void {
+    global $pdo;
+
+    $stmt = $pdo->prepare("SELECT id FROM reading_progress WHERE user_id = :user_id AND resource_id = :resource_id LIMIT 1");
+    $stmt->execute([':user_id' => $userId, ':resource_id' => $resourceId]);
+    $existing = $stmt->fetch();
+
+    if ($existing) {
+        $stmt = $pdo->prepare("UPDATE reading_progress SET last_viewed_at = CURRENT_TIMESTAMP WHERE user_id = :user_id AND resource_id = :resource_id");
+        $stmt->execute([':user_id' => $userId, ':resource_id' => $resourceId]);
+    } else {
+        $stmt = $pdo->prepare("INSERT INTO reading_progress (user_id, resource_id, last_position, progress_percent) VALUES (:user_id, :resource_id, 0, 0)");
+        $stmt->execute([':user_id' => $userId, ':resource_id' => $resourceId]);
+    }
+}
+
+// =============================================
+// USER SETTINGS HELPER FUNCTIONS
+// =============================================
+
+function get_user_dark_mode(int $userId): bool {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT dark_mode FROM user_settings WHERE user_id = :user_id LIMIT 1");
+    $stmt->execute([':user_id' => $userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ? (bool)$row['dark_mode'] : false;
+}
+
+function set_user_dark_mode(int $userId, bool $darkMode): void {
+    global $pdo;
+
+    $stmt = $pdo->prepare("SELECT id FROM user_settings WHERE user_id = :user_id LIMIT 1");
+    $stmt->execute([':user_id' => $userId]);
+    $existing = $stmt->fetch();
+
+    if ($existing) {
+        $stmt = $pdo->prepare("UPDATE user_settings SET dark_mode = :dark_mode WHERE user_id = :user_id");
+    } else {
+        $stmt = $pdo->prepare("INSERT INTO user_settings (user_id, dark_mode) VALUES (:user_id, :dark_mode)");
+    }
+    $stmt->execute([':user_id' => $userId, ':dark_mode' => $darkMode ? 1 : 0]);
+}
+
+// =============================================
+// APPLICATION SETTINGS
+// =============================================
+
+function get_app_setting(string $key, ?string $default = null): ?string {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = :key LIMIT 1");
+    $stmt->execute([':key' => $key]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return $default;
+    }
+    return $row['setting_value'];
+}
+
+function set_app_setting(string $key, string $value): void {
+    global $pdo, $DB_DRIVER;
+    if ($DB_DRIVER === 'mysql') {
+        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value)
+                               VALUES (:key, :value)
+                               ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    } else {
+        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value)
+                               VALUES (:key, :value)
+                               ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value");
+    }
+    $stmt->execute([':key' => $key, ':value' => $value]);
+}
+
+function is_registration_enabled(): bool {
+    $value = get_app_setting('registration_enabled', '1');
+    return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+}
+
+function get_registration_mode(): string {
+    $mode = get_app_setting('registration_mode', 'open');
+    return in_array($mode, ['open', 'admin_approved'], true) ? $mode : 'open';
+}
+
+function is_email_verification_required(): bool {
+    $value = get_app_setting('require_email_verification', '1');
+    return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+}
+
+function issue_email_verification_token(int $userId, int $ttlSeconds = 86400): string {
+    global $pdo;
+    $token = bin2hex(random_bytes(20));
+    $expiresAt = date('Y-m-d H:i:s', time() + max(3600, $ttlSeconds));
+
+    $pdo->prepare("DELETE FROM email_verification_tokens WHERE user_id = :uid")
+        ->execute([':uid' => $userId]);
+
+    $stmt = $pdo->prepare("INSERT INTO email_verification_tokens (user_id, token, expires_at)
+                           VALUES (:uid, :token, :expires_at)");
+    $stmt->execute([
+        ':uid' => $userId,
+        ':token' => $token,
+        ':expires_at' => $expiresAt,
+    ]);
+    return $token;
+}
+
+function verify_email_token(string $token): ?array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT * FROM email_verification_tokens WHERE token = :token LIMIT 1");
+    $stmt->execute([':token' => $token]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return null;
+    }
+    if (strtotime($row['expires_at']) < time()) {
+        $pdo->prepare("DELETE FROM email_verification_tokens WHERE id = :id")->execute([':id' => $row['id']]);
+        return null;
+    }
+
+    $pdo->prepare("UPDATE users SET email_verified_at = CURRENT_TIMESTAMP WHERE id = :uid")
+        ->execute([':uid' => $row['user_id']]);
+    $pdo->prepare("DELETE FROM email_verification_tokens WHERE id = :id")
+        ->execute([':id' => $row['id']]);
+
+    $userStmt = $pdo->prepare("SELECT * FROM users WHERE id = :id LIMIT 1");
+    $userStmt->execute([':id' => $row['user_id']]);
+    return $userStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+// =============================================
+// RESOURCE MODERATION + COMMUNITY FEATURES
+// =============================================
+
+function resource_is_visible(array $resource, ?array $user): bool {
+    $status = $resource['status'] ?? 'approved';
+    if ($status === 'approved') {
+        return true;
+    }
+    if ($user && is_admin()) {
+        return true;
+    }
+    if ($user && isset($resource['created_by']) && (int)$resource['created_by'] === (int)$user['id']) {
+        return true;
+    }
+    return false;
+}
+
+function get_resource_rating_summary(int $resourceId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT AVG(rating) AS avg_rating, COUNT(*) AS total_reviews
+                           FROM resource_reviews
+                           WHERE resource_id = :id AND status = 'approved'");
+    $stmt->execute([':id' => $resourceId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['avg_rating' => 0, 'total_reviews' => 0];
+    return [
+        'avg_rating' => (float)($row['avg_rating'] ?? 0),
+        'total_reviews' => (int)($row['total_reviews'] ?? 0),
+    ];
+}
+
+function get_user_review(int $resourceId, int $userId): ?array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT * FROM resource_reviews WHERE resource_id = :rid AND user_id = :uid LIMIT 1");
+    $stmt->execute([':rid' => $resourceId, ':uid' => $userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function save_resource_review(int $resourceId, int $userId, int $rating, ?string $reviewText): string {
+    global $pdo, $REVIEWS_REQUIRE_APPROVAL;
+    $rating = max(1, min(5, $rating));
+    $reviewText = trim((string)$reviewText);
+
+    $status = (!empty($REVIEWS_REQUIRE_APPROVAL) && !is_admin()) ? 'pending' : 'approved';
+
+    $existing = get_user_review($resourceId, $userId);
+    if ($existing) {
+        $stmt = $pdo->prepare("UPDATE resource_reviews
+                               SET rating = :rating, review = :review, status = :status, updated_at = CURRENT_TIMESTAMP
+                               WHERE id = :id");
+        $stmt->execute([
+            ':rating' => $rating,
+            ':review' => $reviewText !== '' ? $reviewText : null,
+            ':status' => $status,
+            ':id' => $existing['id'],
+        ]);
+        return $status;
+    }
+
+    $stmt = $pdo->prepare("INSERT INTO resource_reviews (resource_id, user_id, rating, review, status)
+                           VALUES (:rid, :uid, :rating, :review, :status)");
+    $stmt->execute([
+        ':rid' => $resourceId,
+        ':uid' => $userId,
+        ':rating' => $rating,
+        ':review' => $reviewText !== '' ? $reviewText : null,
+        ':status' => $status,
+    ]);
+    return $status;
+}
+
+function get_resource_reviews_for_display(int $resourceId, ?int $userId, bool $isAdmin, string $sort = 'newest'): array {
+    global $pdo;
+    $orderBy = match ($sort) {
+        'oldest' => 'rr.created_at ASC',
+        'rating_high' => 'rr.rating DESC, rr.created_at DESC',
+        'rating_low' => 'rr.rating ASC, rr.created_at DESC',
+        default => 'rr.created_at DESC',
+    };
+    if ($isAdmin) {
+        $stmt = $pdo->prepare("SELECT rr.*, u.name AS user_name
+                               FROM resource_reviews rr
+                               JOIN users u ON rr.user_id = u.id
+                               WHERE rr.resource_id = :rid
+                               ORDER BY $orderBy");
+        $stmt->execute([':rid' => $resourceId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    if ($userId) {
+        $stmt = $pdo->prepare("SELECT rr.*, u.name AS user_name
+                               FROM resource_reviews rr
+                               JOIN users u ON rr.user_id = u.id
+                               WHERE rr.resource_id = :rid AND (rr.status = 'approved' OR (rr.user_id = :uid AND rr.status = 'pending'))
+                               ORDER BY $orderBy");
+        $stmt->execute([':rid' => $resourceId, ':uid' => $userId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    $stmt = $pdo->prepare("SELECT rr.*, u.name AS user_name
+                           FROM resource_reviews rr
+                           JOIN users u ON rr.user_id = u.id
+                           WHERE rr.resource_id = :rid AND rr.status = 'approved'
+                           ORDER BY $orderBy");
+    $stmt->execute([':rid' => $resourceId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function save_resource_comment(int $resourceId, int $userId, string $content, ?int $parentId = null): string {
+    global $pdo, $COMMENTS_REQUIRE_APPROVAL;
+    $content = trim($content);
+    $status = (!empty($COMMENTS_REQUIRE_APPROVAL) && !is_admin()) ? 'pending' : 'approved';
+    $stmt = $pdo->prepare("INSERT INTO resource_comments (resource_id, user_id, parent_id, content, status)
+                           VALUES (:rid, :uid, :parent_id, :content, :status)");
+    $stmt->execute([
+        ':rid' => $resourceId,
+        ':uid' => $userId,
+        ':parent_id' => $parentId,
+        ':content' => $content,
+        ':status' => $status,
+    ]);
+    return $status;
+}
+
+function get_resource_comments_for_display(int $resourceId, ?int $userId, bool $isAdmin, string $sort = 'oldest'): array {
+    global $pdo;
+    $orderBy = $sort === 'newest' ? 'rc.created_at DESC' : 'rc.created_at ASC';
+    if ($isAdmin) {
+        $stmt = $pdo->prepare("SELECT rc.*, u.name AS user_name
+                               FROM resource_comments rc
+                               JOIN users u ON rc.user_id = u.id
+                               WHERE rc.resource_id = :rid
+                               ORDER BY $orderBy");
+        $stmt->execute([':rid' => $resourceId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    if ($userId) {
+        $stmt = $pdo->prepare("SELECT rc.*, u.name AS user_name
+                               FROM resource_comments rc
+                               JOIN users u ON rc.user_id = u.id
+                               WHERE rc.resource_id = :rid AND (rc.status = 'approved' OR (rc.user_id = :uid AND rc.status = 'pending'))
+                               ORDER BY $orderBy");
+        $stmt->execute([':rid' => $resourceId, ':uid' => $userId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    $stmt = $pdo->prepare("SELECT rc.*, u.name AS user_name
+                           FROM resource_comments rc
+                           JOIN users u ON rc.user_id = u.id
+                           WHERE rc.resource_id = :rid AND rc.status = 'approved'
+                           ORDER BY $orderBy");
+    $stmt->execute([':rid' => $resourceId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function report_resource_content(string $contentType, int $contentId, int $reportedBy, ?string $reason = null): bool {
+    global $pdo;
+    $contentType = strtolower($contentType);
+    if (!in_array($contentType, ['comment', 'review'], true)) {
+        return false;
+    }
+
+    $stmt = $pdo->prepare("SELECT id FROM resource_reports WHERE content_type = :type AND content_id = :cid AND reported_by = :uid LIMIT 1");
+    $stmt->execute([':type' => $contentType, ':cid' => $contentId, ':uid' => $reportedBy]);
+    if ($stmt->fetch()) {
+        return false;
+    }
+
+    $insert = $pdo->prepare("INSERT INTO resource_reports (content_type, content_id, reported_by, reason)
+                             VALUES (:type, :cid, :uid, :reason)");
+    $insert->execute([
+        ':type' => $contentType,
+        ':cid' => $contentId,
+        ':uid' => $reportedBy,
+        ':reason' => $reason ? trim($reason) : null,
+    ]);
+
+    if ($contentType === 'comment') {
+        $pdo->prepare("UPDATE resource_comments SET status = CASE WHEN status = 'approved' THEN 'flagged' ELSE status END WHERE id = :id")
+            ->execute([':id' => $contentId]);
+    } else {
+        $pdo->prepare("UPDATE resource_reviews SET status = CASE WHEN status = 'approved' THEN 'flagged' ELSE status END WHERE id = :id")
+            ->execute([':id' => $contentId]);
+    }
+
+    return true;
 }

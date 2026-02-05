@@ -65,69 +65,13 @@ function renderRow($name, $required) {
 
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="server-limits-page">
 <head>
     <meta charset="UTF-8">
     <title>Server Limits Check</title>
-    <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: #f5f5f5;
-            padding: 20px;
-        }
-        h1 {
-            margin-bottom: 5px;
-        }
-        small {
-            color: #666;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            max-width: 800px;
-            background: #fff;
-            border-radius: 6px;
-            overflow: hidden;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        th, td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #eee;
-            text-align: left;
-            font-size: 14px;
-        }
-        th {
-            background: #fafafa;
-            font-weight: 600;
-        }
-        tr.ok .status {
-            color: #0f5132;
-            font-weight: 600;
-        }
-        tr.low .status {
-            color: #842029;
-            font-weight: 600;
-        }
-        tr.low {
-            background: #fff5f5;
-        }
-        code {
-            background: #f0f0f0;
-            padding: 2px 4px;
-            border-radius: 4px;
-        }
-        .meta {
-            margin-top: 15px;
-            max-width: 800px;
-            font-size: 13px;
-            color: #555;
-        }
-        .meta code {
-            background: #eee;
-        }
-    </style>
+    <link rel="stylesheet" href="assets/css/components.css">
 </head>
-<body>
+<body class="server-limits-page">
 
 <h1>Server Limits Check</h1>
 <small>PHP version: <strong><?php echo PHP_VERSION; ?></strong></small>
@@ -165,3 +109,4 @@ function renderRow($name, $required) {
 
 
 <?php phpinfo();?>
+

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+redirect_legacy_php('admin/user/add');
 require_admin();
 
 $errors = [];
@@ -52,13 +53,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         try {
             $pdo->beginTransaction();
-            $stmt = $pdo->prepare("INSERT INTO users (name, email, password_hash, profile_image_path, role) VALUES (:name, :email, :pw, :profile, :role)");
+            $stmt = $pdo->prepare("INSERT INTO users (name, email, password_hash, profile_image_path, role, status, email_verified_at, approved_by, approved_at)
+                                   VALUES (:name, :email, :pw, :profile, :role, :status, :email_verified_at, :approved_by, :approved_at)");
             $stmt->execute([
                 ':name' => $name,
                 ':email' => $email,
                 ':pw' => password_hash($password, PASSWORD_DEFAULT),
                 ':profile' => $avatarUpload['path'] ?? null,
-                ':role' => $role
+                ':role' => $role,
+                ':status' => 'active',
+                ':email_verified_at' => date('Y-m-d H:i:s'),
+                ':approved_by' => current_user()['id'],
+                ':approved_at' => date('Y-m-d H:i:s'),
             ]);
             $newUserId = $pdo->lastInsertId();
 
@@ -103,7 +109,7 @@ include __DIR__ . '/../includes/header.php';
 <div class="page-header">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-            <h2 class="fw-bold mb-2" style="color:var(--primary-color)"><i class="fas fa-user-plus me-3"></i>Add New User</h2>
+            <h2 class="fw-bold mb-2 page-title"><i class="fas fa-user-plus me-3"></i>Add New User</h2>
             <p class="text-muted mb-0">Create a new user account</p>
         </div>
         <a href="<?= h(app_path('admin/users')) ?>" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-2"></i>Back</a>
@@ -165,11 +171,11 @@ include __DIR__ . '/../includes/header.php';
         </div>
 
         <!-- Role-specific fields (same as before) -->
-        <div class="form-section" id="student-fields" style="display:<?= $role==='student'?'block':'none' ?>;">
+        <div class="form-section role-section <?= $role==='student'?'is-visible':'is-hidden' ?>" id="student-fields">
             <h5 class="section-title"><i class="fas fa-id-card"></i> Student Details</h5>
             <!-- ... your student fields ... -->
         </div>
-        <div class="form-section" id="staff-fields" style="display:<?= $role==='staff'?'block':'none' ?>;">
+        <div class="form-section role-section <?= $role==='staff'?'is-visible':'is-hidden' ?>" id="staff-fields">
             <h5 class="section-title"><i class="fas fa-chalkboard-teacher"></i> Staff Details</h5>
             <!-- ... your staff fields ... -->
         </div>
@@ -230,10 +236,19 @@ document.addEventListener('DOMContentLoaded', function() {
         input.value = ''; preview.classList.remove('active'); img.src = ''; dropZone.style.display = 'block';
     });
 
+    const studentFields = document.getElementById('student-fields');
+    const staffFields = document.getElementById('staff-fields');
+
+    function setVisibility(el, show) {
+        if (!el) return;
+        el.classList.toggle('is-hidden', !show);
+        el.classList.toggle('is-visible', show);
+    }
+
     // Role toggle
     document.querySelectorAll('input[name="role"]').forEach(r => r.addEventListener('change', () => {
-        document.getElementById('student-fields').style.display = r.value === 'student' ? 'block' : 'none';
-        document.getElementById('staff-fields').style.display = r.value === 'staff' ? 'block' : 'none';
+        setVisibility(studentFields, r.value === 'student');
+        setVisibility(staffFields, r.value === 'staff');
     }));
 });
 </script>

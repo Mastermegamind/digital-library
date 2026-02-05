@@ -1,5 +1,9 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+$legacyId = (int)($_GET['id'] ?? 0);
+if ($legacyId > 0) {
+    redirect_legacy_php('admin/user/delete/' . $legacyId, ['id' => null]);
+}
 require_admin();
 
 $id = isset($_POST['id']) ? (int) $_POST['id'] : (isset($_GET['id']) ? (int) $_GET['id'] : 0);

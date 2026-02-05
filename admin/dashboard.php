@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+redirect_legacy_php('admin/dashboard');
 require_admin();
 
 $stats = [];
@@ -18,169 +19,6 @@ $meta_title = 'Admin Dashboard - ' . $APP_NAME;
 $meta_description = 'Administrative dashboard overview for ' . $APP_NAME . '.';
 include __DIR__ . '/../includes/header.php';
 ?>
-
-<style>
-    .page-header {
-        background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(59, 130, 246, 0.05));
-        border-radius: 20px;
-        padding: 2.5rem;
-        margin-bottom: 2rem;
-        border: 1px solid rgba(37, 99, 235, 0.1);
-    }
-
-    .stat-card {
-        background: white;
-        border-radius: 16px;
-        padding: 2rem;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        height: 100%;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, var(--gradient-from), var(--gradient-to));
-    }
-
-    .stat-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
-    }
-
-    .stat-icon {
-        width: 70px;
-        height: 70px;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2rem;
-        color: white;
-        margin-bottom: 1.5rem;
-        background: linear-gradient(135deg, var(--gradient-from), var(--gradient-to));
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
-    }
-
-    .stat-number {
-        font-size: 2.5rem;
-        font-weight: 800;
-        color: var(--text-primary);
-        margin-bottom: 0.5rem;
-        line-height: 1;
-    }
-
-    .stat-label {
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .quick-actions-card {
-        background: white;
-        border-radius: 16px;
-        padding: 2rem;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-    }
-
-    .quick-action-btn {
-        padding: 1rem 1.5rem;
-        border-radius: 12px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        border: 2px solid var(--border-color);
-        background: white;
-        color: var(--text-primary);
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .quick-action-btn:hover {
-        border-color: var(--primary-color);
-        background: var(--primary-color);
-        color: white;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-    }
-
-    .quick-action-btn i {
-        font-size: 1.25rem;
-    }
-
-    .recent-resources-card {
-        background: white;
-        border-radius: 16px;
-        padding: 2rem;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-    }
-
-    .resource-item {
-        padding: 1rem;
-        border-radius: 12px;
-        transition: all 0.3s ease;
-        border: 1px solid transparent;
-    }
-
-    .resource-item:hover {
-        background: rgba(37, 99, 235, 0.03);
-        border-color: var(--primary-color);
-        transform: translateX(4px);
-    }
-
-    .resource-cover-mini {
-        width: 60px;
-        height: 60px;
-        object-fit: cover;
-        border-radius: 8px;
-        border: 2px solid var(--border-color);
-    }
-
-    .type-badge {
-        padding: 0.25rem 0.75rem;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .section-title {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin-bottom: 1.5rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .section-title::after {
-        content: '';
-        flex: 1;
-        height: 2px;
-        background: linear-gradient(90deg, var(--border-color), transparent);
-    }
-
-    .welcome-card {
-        background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-        color: white;
-        border-radius: 16px;
-        padding: 2rem;
-        margin-bottom: 2rem;
-        box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
-    }
-</style>
-
 <!-- Welcome Card -->
 <div class="welcome-card">
     <div class="row align-items-center">
@@ -205,7 +43,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- Statistics Cards -->
 <div class="row g-4 mb-4">
     <div class="col-md-4">
-        <div class="stat-card" style="--gradient-from: #2563eb; --gradient-to: #3b82f6;">
+        <div class="stat-card admin-stat-card stat-gradient-primary">
             <div class="stat-icon">
                 <i class="fas fa-users"></i>
             </div>
@@ -215,7 +53,7 @@ include __DIR__ . '/../includes/header.php';
     </div>
     
     <div class="col-md-4">
-        <div class="stat-card" style="--gradient-from: #10b981; --gradient-to: #059669;">
+        <div class="stat-card admin-stat-card stat-gradient-success">
             <div class="stat-icon">
                 <i class="fas fa-book"></i>
             </div>
@@ -225,7 +63,7 @@ include __DIR__ . '/../includes/header.php';
     </div>
     
     <div class="col-md-4">
-        <div class="stat-card" style="--gradient-from: #f59e0b; --gradient-to: #d97706;">
+        <div class="stat-card admin-stat-card stat-gradient-warning">
             <div class="stat-icon">
                 <i class="fas fa-folder-open"></i>
             </div>
@@ -237,7 +75,7 @@ include __DIR__ . '/../includes/header.php';
 
 <!-- Quick Actions -->
 <div class="quick-actions-card mb-4">
-    <h5 class="section-title">
+    <h5 class="section-title-divider">
         <i class="fas fa-bolt"></i>
         Quick Actions
     </h5>
@@ -268,7 +106,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- Recent Resources -->
 <?php if (!empty($recentResources)): ?>
 <div class="recent-resources-card">
-    <h5 class="section-title">
+    <h5 class="section-title-divider">
         <i class="fas fa-clock"></i>
         Recent Resources
     </h5>
@@ -286,11 +124,11 @@ include __DIR__ . '/../includes/header.php';
                         <img src="<?= h($cover) ?>" alt="Cover" class="resource-cover-mini">
                     </div>
                     <div class="col">
-                        <div class="fw-bold text-truncate" style="color: var(--text-primary);">
+                        <div class="fw-bold text-truncate">
                             <?= h($resource['title']) ?>
                         </div>
                         <div class="d-flex align-items-center gap-2 mt-1">
-                            <span class="type-badge" style="background: rgba(37, 99, 235, 0.1); color: var(--primary-color);">
+                            <span class="type-badge type-badge-primary">
                                 <?= strtoupper($resource['type']) ?>
                             </span>
                             <?php if ($resource['category_name']): ?>

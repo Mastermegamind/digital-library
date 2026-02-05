@@ -1,8 +1,12 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+$legacyId = (int)($_GET['id'] ?? 0);
+if ($legacyId > 0) {
+    redirect_legacy_php('admin/resource/edit/' . $legacyId, ['id' => null]);
+}
 require_admin();
 
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$id = $legacyId;
 $stmt = $pdo->prepare("SELECT * FROM resources WHERE id = :id");
 $stmt->execute([':id' => $id]);
 $resource = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -110,7 +114,7 @@ include __DIR__ . '/../includes/header.php';
 <div class="page-header">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-            <h2 class="fw-bold mb-2" style="color: var(--primary-color);">
+            <h2 class="fw-bold mb-2 page-title">
                 <i class="fas fa-edit me-3"></i>Edit Resource
             </h2>
             <p class="text-muted mb-0">Modify details for: <strong><?= h($resource['title']) ?></strong></p>
@@ -203,7 +207,7 @@ include __DIR__ . '/../includes/header.php';
 
                     <?php if (!empty($resource['file_path'])): ?>
                         <div class="current-file-info">
-                            <i class="fas fa-check-circle text-success" style="font-size: 2rem;"></i>
+                            <i class="fas fa-check-circle text-success icon-xl"></i>
                             <div>
                                 <strong>Current file:</strong> <?= h(basename($resource['file_path'])) ?><br>
                                 <small class="text-success">Will be kept if no new file is uploaded</small>

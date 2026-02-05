@@ -8,8 +8,23 @@
     RewriteCond %{THE_REQUEST} \s/+login\.php[\s?] [NC]
     RewriteRule ^login\.php$ /login [R=301,L]
 
+    RewriteCond %{THE_REQUEST} \s/+register\.php[\s?] [NC]
+    RewriteRule ^register\.php$ /register [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+verify_email\.php[\s?] [NC]
+    RewriteRule ^verify_email\.php$ /verify-email [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+resend_verification\.php[\s?] [NC]
+    RewriteRule ^resend_verification\.php$ /resend-verification [R=301,L]
+
     RewriteCond %{THE_REQUEST} \s/+logout\.php[\s?] [NC]
     RewriteRule ^logout\.php$ /logout [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+submit_resource\.php[\s?] [NC]
+    RewriteRule ^submit_resource\.php$ /submit [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s/+my_submissions\.php[\s?] [NC]
+    RewriteRule ^my_submissions\.php$ /my-submissions [R=301,L]
 
     RewriteCond %{THE_REQUEST} \s/+resource\.php\?id=([0-9]+) [NC]
     RewriteRule ^resource\.php$ /resource/%1? [R=301,L]
@@ -31,6 +46,12 @@
 
     RewriteCond %{THE_REQUEST} \s+/admin/resources\.php[\s?] [NC]
     RewriteRule ^admin/resources\.php$ /admin/resources [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/settings\.php[\s?] [NC]
+    RewriteRule ^admin/settings\.php$ /admin/settings [R=301,L]
+
+    RewriteCond %{THE_REQUEST} \s+/admin/moderation\.php[\s?] [NC]
+    RewriteRule ^admin/moderation\.php$ /admin/moderation [R=301,L]
 
     RewriteCond %{THE_REQUEST} \s+/admin/resource_add\.php[\s?] [NC]
     RewriteRule ^admin/resource_add\.php$ /admin/resource/add [R=301,L]

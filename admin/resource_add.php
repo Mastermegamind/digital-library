@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+redirect_legacy_php('admin/resource/add');
 require_admin();
 
 $catStmt = $pdo->query("SELECT * FROM categories ORDER BY name ASC");
@@ -55,8 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $coverPath = $coverResult['path'];
 
     $stmt = $pdo->prepare("INSERT INTO resources
-        (title, description, type, category_id, file_path, cover_image_path, external_url, created_by)
-        VALUES (:title, :description, :type, :category_id, :file_path, :cover, :external_url, :created_by)");
+        (title, description, type, category_id, file_path, cover_image_path, external_url, created_by, status, approved_by, approved_at)
+        VALUES (:title, :description, :type, :category_id, :file_path, :cover, :external_url, :created_by, :status, :approved_by, :approved_at)");
     $stmt->execute([
         ':title' => $title,
         ':description' => $description,
@@ -66,6 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ':cover' => $coverPath,
         ':external_url' => $external_url ?: null,
         ':created_by' => current_user()['id'],
+        ':status' => 'approved',
+        ':approved_by' => current_user()['id'],
+        ':approved_at' => date('Y-m-d H:i:s'),
     ]);
 
     log_info('Resource created', [
@@ -91,7 +95,7 @@ include __DIR__ . '/../includes/header.php';
 <div class="page-header">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-            <h2 class="fw-bold mb-2" style="color: var(--primary-color);">
+            <h2 class="fw-bold mb-2 page-title">
                 <i class="fas fa-plus-circle me-3"></i>Add New Resource
             </h2>
             <p class="text-muted mb-0">

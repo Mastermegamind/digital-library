@@ -1,8 +1,12 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+$legacyToken = $_GET['token'] ?? '';
+if ($legacyToken !== '') {
+    redirect_legacy_php('secure/' . $legacyToken, ['token' => null]);
+}
 require_login();
 
-$token = $_GET['token'] ?? '';
+$token = $legacyToken;
 $tokenData = $token ? get_resource_token($token) : null;
 
 if (!$tokenData) {

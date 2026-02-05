@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+redirect_legacy_php('login');
 
 if (is_logged_in()) {
     header('Location: ' . app_path(''));
@@ -7,7 +8,10 @@ if (is_logged_in()) {
 }
 
 $errors = [];
+$needsVerification = false;
+$pendingEmail = '';
 $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$registrationEnabled = is_registration_enabled();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $identifier = trim($_POST['identifier'] ?? '');
@@ -58,29 +62,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($user && password_verify($password, $user['password_hash'])) {
-            login_user($user['id']);
-            rate_limit_reset($rateKeyIp);
-            if ($rateKeyId) {
-                rate_limit_reset($rateKeyId);
-            }
-
-            if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
-                $method = 'Email';
+            $status = $user['status'] ?? 'active';
+            if ($status !== 'active') {
+                $errors[] = $status === 'pending'
+                    ? 'Your account is pending admin approval.'
+                    : 'Your account is not active. Please contact support.';
+            } elseif (is_email_verification_required() && empty($user['email_verified_at'])) {
+                $errors[] = 'Please verify your email before logging in.';
+                $needsVerification = true;
+                $pendingEmail = $user['email'] ?? '';
             } else {
-                $method = $user['role'] === 'student' ? 'Reg No' :
-                         ($user['role'] === 'staff' ? 'Staff ID' : 'Admin ID / Username');
+                login_user($user['id']);
+                rate_limit_reset($rateKeyIp);
+                if ($rateKeyId) {
+                    rate_limit_reset($rateKeyId);
+                }
+
+                if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+                    $method = 'Email';
+                } else {
+                    $method = $user['role'] === 'student' ? 'Reg No' :
+                             ($user['role'] === 'staff' ? 'Staff ID' : 'Admin ID / Username');
+                }
+
+                log_info('User logged in', [
+                    'user_id' => $user['id'],
+                    'name'    => $user['name'],
+                    'role'    => $user['role'],
+                    'method'  => $method
+                ]);
+
+                flash_message('success', 'Welcome back, ' . h($user['name']) . '!');
+                header('Location: ' . app_path(''));
+                exit;
             }
-
-            log_info('User logged in', [
-                'user_id' => $user['id'],
-                'name'    => $user['name'],
-                'role'    => $user['role'],
-                'method'  => $method
-            ]);
-
-            flash_message('success', 'Welcome back, ' . h($user['name']) . '!');
-            header('Location: ' . app_path(''));
-            exit;
         } else {
             log_warning('Invalid login attempt', ['identifier' => $identifier]);
             $rateLimit = (int)($LOGIN_RATE_LIMIT ?? 8);
@@ -185,254 +200,9 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
     <link href="<?= app_path('assets/css/bootstrap.min.css') ?>" rel="stylesheet">
     <link rel="stylesheet" href="<?= app_path('assets/css/all.min.css') ?>">
     <link rel="stylesheet" href="<?= app_path('assets/css/inter.css') ?>">
-    <style>
-        :root {
---primary-color: #009D52;
---secondary-color: #187048;
---accent-color: #00A050;
-            --danger-color: #ef4444;
-            --text-primary: #1e293b;
-            --text-secondary: #64748b;
-            --border-color: #e2e8f0;
-            --card-bg: rgba(255, 255, 255, 0.92);
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            min-height: 100vh;
-            min-height: 100dvh;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: clamp(0.75rem, 2.2vh, 2rem) 1rem;
-            overflow-y: auto;
-
-            /* Full background image */
-            background: url('<?= app_path('assets/images/login-bg.jpeg') ?>') center/cover no-repeat fixed;
-        }
-
-        /* Faded blue overlay - keeps your original blue vibe */
-        body::before {
-            content: "";
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: linear-gradient(135deg, 
-                rgba(4, 122, 44, 0.78),   /* your primary blue */
-                rgba(5, 87, 32, 0.68)); /* slightly lighter */
-            pointer-events: none;
-            z-index: 1;
-        }
-
-        .login-container { 
-            max-width: 480px;
-            width: 100%; 
-            position: relative;
-            z-index: 2;
-        }
-
-        .login-card {
-            background: var(--card-bg);
-            border-radius: 24px;
-            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
-            overflow: hidden auto;
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            max-height: calc(100vh - 1.5rem);
-        }
-
-        .login-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-            padding: clamp(1.5rem, 4.5vh, 3.5rem) clamp(1rem, 2.5vw, 2rem) clamp(1.25rem, 3vh, 2.5rem);
-            text-align: center;
-        }
-
-        .logo-circle {
-            width: clamp(90px, 17vh, 150px);
-            height: clamp(90px, 17vh, 150px);
-            background: white;
-            border-radius: 50%;
-            margin: 0 auto clamp(0.75rem, 2vh, 1.5rem);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
-            overflow: hidden;
-        }
-
-        .logo-circle img {
-            width: clamp(90px, 17vh, 150px);
-            height: clamp(90px, 17vh, 150px);
-            object-fit: contain;
-        }
-
-        .login-title {
-            color: white;
-            font-size: clamp(1.35rem, 3.4vh, 2.125rem);
-            font-weight: 800;
-            margin-bottom: clamp(0.25rem, 1vh, 0.5rem);
-        }
-
-        .login-subtitle {
-            color: rgba(255, 255, 255, 0.95);
-            font-size: clamp(0.88rem, 2vh, 1.1rem);
-            font-weight: 500;
-        }
-
-        .login-body {
-            padding: clamp(1rem, 3vh, 2.5rem) clamp(1rem, 2.2vw, 2.5rem);
-        }
-
-        .form-label {
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .input-wrapper {
-            position: relative;
-            margin-bottom: clamp(0.75rem, 1.8vh, 1.5rem);
-        }
-
-        .input-icon {
-            position: absolute;
-            left: 0; top: 0; height: 100%; width: clamp(44px, 6vh, 56px);
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 16px 0 0 16px;
-            font-size: 1.25rem;
-        }
-
-        .form-control {
-            padding-left: clamp(56px, 8vh, 70px);
-            height: clamp(46px, 6.5vh, 58px);
-            border: 2px solid var(--border-color);
-            border-radius: 16px;
-            font-size: clamp(0.95rem, 1.75vh, 1rem);
-            transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.7);
-        }
-
-        .form-control:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.2);
-            background: white;
-        }
-
-        .btn-login {
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-            border: none;
-            color: white;
-            height: clamp(46px, 6.5vh, 58px);
-            font-size: clamp(1rem, 1.95vh, 1.125rem);
-            font-weight: 700;
-            border-radius: 16px;
-            width: 100%;
-            transition: all 0.3s ease;
-            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.35);
-        }
-
-        .btn-login:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 15px 35px rgba(37, 99, 235, 0.45);
-        }
-
-        .alert-danger {
-            background: rgba(239, 68, 68, 0.15);
-            border-left: 5px solid var(--danger-color);
-            border-radius: 12px;
-            padding: 1rem 1.25rem;
-            margin-bottom: 1.5rem;
-            color: #dc2626;
-        }
-
-        .login-footer {
-            text-align: center;
-            padding: clamp(0.75rem, 1.8vh, 1.5rem);
-            background: rgba(248, 250, 252, 0.9);
-            color: var(--text-secondary);
-            font-size: clamp(0.78rem, 1.5vh, 0.875rem);
-            border-top: 1px solid var(--border-color);
-        }
-
-        .hint-text {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            margin-top: 1rem;
-        }
-
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .login-container {
-                max-width: 440px;
-            }
-        }
-
-        @media (max-height: 820px) {
-            .login-header {
-                padding-top: 1rem;
-                padding-bottom: 0.85rem;
-            }
-
-            .logo-circle,
-            .logo-circle img {
-                width: 84px;
-                height: 84px;
-            }
-
-            .login-title {
-                font-size: 1.35rem;
-            }
-
-            .login-subtitle {
-                font-size: 0.86rem;
-            }
-
-            .login-body {
-                padding-top: 0.9rem;
-                padding-bottom: 0.9rem;
-            }
-
-            .form-label {
-                font-size: 0.8rem;
-                margin-bottom: 0.35rem;
-            }
-
-            .hint-text {
-                line-height: 1.45;
-                margin-top: 0.65rem;
-            }
-
-            .btn-login.mt-4 {
-                margin-top: 0.75rem !important;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .login-container {
-                max-width: 100%;
-            }
-
-            .login-header {
-                padding-left: 1rem;
-                padding-right: 1rem;
-            }
-
-            .login-body {
-                padding-left: 1rem;
-                padding-right: 1rem;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="<?= app_path('assets/css/components.css') ?>">
 </head>
-<body>
+<body class="login-page">
 
 <!-- Background overlay is handled by ::before -->
 
@@ -492,6 +262,21 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
                     <i class="fas fa-sign-in-alt me-2"></i>Sign In
                 </button>
             </form>
+
+            <div class="text-center mt-3">
+                <?php if ($registrationEnabled): ?>
+                    <a href="<?= h(app_path('register')) ?>" class="text-decoration-none">
+                        Create a new account
+                    </a>
+                <?php endif; ?>
+                <?php if ($needsVerification): ?>
+                    <div class="mt-2">
+                        <a href="<?= h(app_path('resend-verification')) ?>" class="text-decoration-none">
+                            Resend verification email
+                        </a>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
 
         <!-- Footer -->
@@ -504,5 +289,46 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
 </div>
 
 <script src="<?= app_path('assets/js/bootstrap.bundle.min.js') ?>"></script>
+
+<script>
+// Ensure input shows the start of the value (robust handling for autofill/paste/focus across browsers)
+(function(){
+    function resetInput(el){
+        try{
+            // place caret at the start and ensure left scroll is 0
+            el.setSelectionRange(0,0);
+            el.scrollLeft = 0;
+        }catch(e){}
+    }
+
+    function attach(el){
+        if(!el) return;
+        var reset = function(){ setTimeout(function(){ resetInput(el); }, 60); };
+
+        ['input','keyup','change','focus'].forEach(function(evt){ el.addEventListener(evt, reset); });
+        el.addEventListener('paste', function(){ setTimeout(reset, 80); });
+
+        // Listen for animationstart which some browsers trigger on autofill
+        el.addEventListener('animationstart', function(e){
+            // any animation associated with autofill will trigger this
+            setTimeout(reset, 60);
+        });
+
+        // Initial attempts on load and multiple retries for the first 2 seconds
+        resetInput(el);
+        var tries = 0;
+        var id = setInterval(function(){ resetInput(el); tries++; if(tries>20){ clearInterval(id); } }, 100);
+
+        window.addEventListener('load', function(){ setTimeout(reset, 80); });
+        window.addEventListener('resize', function(){ setTimeout(reset, 80); });
+    }
+
+    document.addEventListener('DOMContentLoaded', function(){
+        attach(document.querySelector('input[name="identifier"]'));
+        attach(document.querySelector('input[name="password"]'));
+    });
+})();
+</script>
+
 </body>
 </html>

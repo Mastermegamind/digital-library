@@ -1,9 +1,13 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+$legacyId = (int)($_GET['id'] ?? 0);
+if ($legacyId > 0) {
+    redirect_legacy_php('viewer/' . $legacyId, ['id' => null]);
+}
 require_login();
 
-$id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
-$stmt = $pdo->prepare("SELECT r.*, c.name AS category_name, u.name AS creator_name
+$id = $legacyId;
+$stmt = $pdo->prepare("SELECT r.*, COALESCE(r.status, 'approved') AS status, c.name AS category_name, u.name AS creator_name
                        FROM resources r
                        LEFT JOIN categories c ON r.category_id = c.id
                        LEFT JOIN users u ON r.created_by = u.id
@@ -17,6 +21,25 @@ if (!$resource) {
     header('Location: ' . app_path(''));
     exit;
 }
+
+$viewerUser = current_user();
+if (!resource_is_visible($resource, $viewerUser)) {
+    flash_message('error', 'This resource is not yet available.');
+    log_warning('Viewer access blocked', ['resource_id' => $id, 'status' => $resource['status'] ?? null]);
+    header('Location: ' . app_path(''));
+    exit;
+}
+
+// Record view and get saved progress
+$currentUser = current_user();
+$savedProgress = null;
+if ($currentUser) {
+    record_resource_view($currentUser['id'], $id);
+    $savedProgress = get_resource_progress($currentUser['id'], $id);
+}
+
+// Get dark mode preference
+$viewerDarkMode = $currentUser ? get_user_dark_mode($currentUser['id']) : false;
 
 $title = $resource['title'];
 $type = $resource['type'];
@@ -35,91 +58,22 @@ $externalUrl = $resource['external_url'];
 $closeUrl = app_path('');
 
 ?><!doctype html>
-<html lang="en">
+<html lang="en" class="viewer-page" data-theme="<?= $viewerDarkMode ? 'dark' : 'light' ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?php echo h($title); ?> — Viewer</title>
-  <style>
-html, body, #epub-container {
-  height: 100vh !important;
-  width: 100vw !important;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-    .viewer-wrapper {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
-    .viewer-content {
-      width: 100%;
-      height: 100%;
-      background: #000;
-    }
-    iframe, video {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      background: #000;
-    }
-    .close-button {
-      position: fixed;
-      top: 16px;
-      left: 16px;
-      z-index: 1000;
-      background: rgba(0,0,0,0.6);
-      color: #fff;
-      padding: 10px 18px;
-      text-decoration: none;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.3);
-      transition: background 0.2s;
-      backdrop-filter: blur(6px);
-    }
-    .close-button:hover {
-      background: rgba(0,0,0,0.85);
-    }
-    .meta {
-      position: fixed;
-      bottom: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.55);
-      border-radius: 999px;
-      padding: 8px 18px;
-      font-size: 0.95rem;
-      border: 1px solid rgba(255,255,255,0.2);
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      backdrop-filter: blur(6px);
-    }
-    .meta span {
-      color: #ddd;
-    }
-    .meta .title {
-      font-weight: 600;
-      color: #fff;
-    }
-    .placeholder {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      flex-direction: column;
-      text-align: center;
-      gap: 12px;
-    }
-    .placeholder a {
-      color: #0d6efd;
-      text-decoration: none;
-    }
-  </style>
+  <link rel="stylesheet" href="<?php echo h(app_path('assets/css/components.css')); ?>">
 </head>
-<body>
+<body class="viewer-page">
+  <!-- Progress tracking configuration -->
+  <script>
+    const resourceId = <?= (int)$id ?>;
+    const savedPosition = <?= $savedProgress ? (int)$savedProgress['last_position'] : 0 ?>;
+    const savedPercent = <?= $savedProgress ? (float)$savedProgress['progress_percent'] : 0 ?>;
+    const appPath = '<?= h(app_base_path_prefix()) ?>/';
+    const csrfToken = '<?= h(get_csrf_token()) ?>';
+  </script>
   <a class="close-button" href="<?php echo h($closeUrl); ?>">&larr; Close</a>
   <div class="viewer-wrapper">
     <div class="viewer-content">
@@ -127,7 +81,7 @@ html, body, #epub-container {
         <?php $pdfFrame = app_path('pdf/' . urlencode($secureToken)); ?>
         <iframe src="<?php echo h($pdfFrame); ?>" allowfullscreen sandbox="allow-scripts allow-same-origin"></iframe>
       <?php elseif ($type === 'epub' && $fileUrl): ?>
-        <div id="epub-viewer" style="width:100%;height:100%;"></div>
+        <div id="epub-viewer" class="epub-viewer"></div>
       <?php elseif ($type === 'video_file' && $fileUrl): ?>
         <video controls controlsList="nodownload" oncontextmenu="return false;">
           <source src="<?php echo h($fileUrl); ?>" type="video/mp4">
@@ -173,40 +127,40 @@ html, body, #epub-container {
 </div>
 
 <?php if ($type === 'epub' && $fileUrl): ?>
-        <div id="epub-container" style="width:100%;height:100%;background:#2a2a2a;position:relative;">
+        <div id="epub-container" class="epub-container">
           <!-- Controls Bar -->
-          <div id="epub-controls" style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,0.9);padding:12px 20px;z-index:1000;display:flex;align-items:center;gap:15px;backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,0.1);">
-            <button id="epub-prev" style="background:#fff;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;" title="Previous Page">
+          <div id="epub-controls" class="epub-controls">
+            <button id="epub-prev" class="epub-control-btn" title="Previous Page">
               <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                 <path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
               </svg>
             </button>
-            <button id="epub-next" style="background:#fff;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;" title="Next Page">
+            <button id="epub-next" class="epub-control-btn" title="Next Page">
               <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                 <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
               </svg>
             </button>
-            <span id="epub-page-info" style="color:#fff;font-size:14px;margin:0 10px;">Loading...</span>
+            <span id="epub-page-info" class="epub-page-info">Loading...</span>
             
-            <div style="flex:1;"></div>
+            <div class="epub-spacer"></div>
             
             <!-- Zoom Controls -->
-            <button id="epub-zoom-out" style="background:#fff;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;" title="Zoom Out">-</button>
-            <span id="epub-zoom-level" style="color:#fff;font-size:14px;min-width:50px;text-align:center;">100%</span>
-            <button id="epub-zoom-in" style="background:#fff;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;" title="Zoom In">+</button>
-            <button id="epub-zoom-reset" style="background:#fff;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;" title="Reset Zoom">Reset</button>
+            <button id="epub-zoom-out" class="epub-control-btn" title="Zoom Out">-</button>
+            <span id="epub-zoom-level" class="epub-zoom-level">100%</span>
+            <button id="epub-zoom-in" class="epub-control-btn" title="Zoom In">+</button>
+            <button id="epub-zoom-reset" class="epub-control-btn" title="Reset Zoom">Reset</button>
             
             <!-- Font Size Controls -->
-            <div style="border-left:1px solid rgba(255,255,255,0.3);height:24px;margin:0 10px;"></div>
-            <button id="epub-font-decrease" style="background:#fff;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;" title="Decrease Font">A-</button>
-            <button id="epub-font-increase" style="background:#fff;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;" title="Increase Font">A+</button>
+            <div class="epub-divider"></div>
+            <button id="epub-font-decrease" class="epub-control-btn" title="Decrease Font">A-</button>
+            <button id="epub-font-increase" class="epub-control-btn" title="Increase Font">A+</button>
           </div>
           
           <!-- EPUB Reader Area -->
-          <div id="epub-viewer" style="width:100%;height:100%;background:#fff;overflow:hidden;"></div>
+          <div id="epub-viewer" class="epub-viewer"></div>
           
           <!-- Loading Indicator -->
-          <div id="epub-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;">
+          <div id="epub-loading" class="epub-loading">
             <p>Loading EPUB...</p>
           </div>
         </div>
@@ -233,7 +187,7 @@ html, body, #epub-container {
         if (typeof ePub === 'undefined' || typeof JSZip === 'undefined') {
           console.error('Required libraries failed to load');
           if (holder) {
-            holder.innerHTML = '<p style="text-align:center;color:#000;padding:20px;">EPUB viewer unavailable. Libraries failed to load.</p>';
+              holder.innerHTML = '<p class="viewer-error">EPUB viewer unavailable. Libraries failed to load.</p>';
           }
           return;
         }
@@ -264,15 +218,37 @@ html, body, #epub-container {
             });
           })
           .then(function() {
-            // Update page info on location change
+            // Update page info on location change and save progress
             rendition.on('relocated', function(location) {
               updatePageInfo();
+              // Save reading progress
+              if (location && location.start && location.start.displayed) {
+                const current = location.start.displayed.page;
+                const total = location.start.displayed.total;
+                const percent = (current / total) * 100;
+                saveProgress(current, percent, total);
+              }
             });
+
+            // Restore saved position
+            if (savedPosition > 0 && book.spine) {
+              setTimeout(function() {
+                try {
+                  // Try to go to saved page
+                  const spineItem = book.spine.get(savedPosition - 1);
+                  if (spineItem) {
+                    rendition.display(spineItem.href);
+                  }
+                } catch (e) {
+                  console.log('Could not restore position:', e);
+                }
+              }, 500);
+            }
           })
           .catch(function(err) {
             console.error('EPUB render error:', err);
             if (holder) {
-              holder.innerHTML = '<p style="text-align:center;color:#000;padding:20px;">Failed to display EPUB: ' + err.message + '</p>';
+              holder.innerHTML = '<p class="viewer-error">Failed to display EPUB: ' + err.message + '</p>';
             }
           });
         
@@ -365,6 +341,201 @@ html, body, #epub-container {
   <?php endif; ?>
   <script>
     // document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+    // Progress tracking helper
+    function saveProgress(position, percent, totalPages) {
+      const body = new URLSearchParams({
+        csrf_token: csrfToken,
+        resource_id: resourceId,
+        position: position,
+        percent: Math.min(100, Math.max(0, percent))
+      });
+      if (totalPages) {
+        body.append('total_pages', totalPages);
+      }
+
+      fetch(appPath + 'api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+      }).catch(() => {});
+    }
+
+    // Debounce helper
+    function debounce(func, wait) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+
+    // Track video progress
+    const video = document.querySelector('video');
+    if (video) {
+      // Restore saved position
+      if (savedPosition > 0) {
+        video.currentTime = savedPosition;
+      }
+
+      // Save progress periodically
+      const saveVideoProgress = debounce(function() {
+        const percent = (video.currentTime / video.duration) * 100;
+        saveProgress(Math.floor(video.currentTime), percent, Math.floor(video.duration));
+      }, 2000);
+
+      video.addEventListener('timeupdate', saveVideoProgress);
+      video.addEventListener('pause', function() {
+        const percent = (video.currentTime / video.duration) * 100;
+        saveProgress(Math.floor(video.currentTime), percent, Math.floor(video.duration));
+      });
+      video.addEventListener('ended', function() {
+        saveProgress(Math.floor(video.duration), 100, Math.floor(video.duration));
+      });
+    }
+
+    // Track PDF progress via postMessage from pdf_viewer.php iframe
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'pdfProgress') {
+        saveProgress(e.data.page, e.data.percent, e.data.totalPages);
+      }
+    });
+
+    // =============================================
+    // KEYBOARD NAVIGATION
+    // =============================================
+    document.addEventListener('keydown', function(e) {
+      // Don't capture if user is typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const video = document.querySelector('video');
+      const iframe = document.querySelector('.viewer-content iframe');
+      const viewerContent = document.querySelector('.viewer-content');
+
+      switch(e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (video) {
+            // Seek back 10 seconds for video
+            video.currentTime = Math.max(0, video.currentTime - 10);
+          } else if (iframe) {
+            // Send scroll/page command to PDF iframe
+            iframe.contentWindow.postMessage({ type: 'scroll', direction: 'up' }, '*');
+            // Also try scrolling the iframe content
+            try {
+              if (iframe.contentWindow) {
+                iframe.contentWindow.scrollBy({ top: -300, behavior: 'smooth' });
+              }
+            } catch(err) {}
+          }
+          break;
+
+        case 'ArrowRight':
+          e.preventDefault();
+          if (video) {
+            // Seek forward 10 seconds for video
+            video.currentTime = Math.min(video.duration, video.currentTime + 10);
+          } else if (iframe) {
+            // Send scroll/page command to PDF iframe
+            iframe.contentWindow.postMessage({ type: 'scroll', direction: 'down' }, '*');
+            try {
+              if (iframe.contentWindow) {
+                iframe.contentWindow.scrollBy({ top: 300, behavior: 'smooth' });
+              }
+            } catch(err) {}
+          }
+          break;
+
+        case 'ArrowUp':
+          e.preventDefault();
+          if (video) {
+            // Increase volume
+            video.volume = Math.min(1, video.volume + 0.1);
+          } else if (viewerContent) {
+            // Scroll up in viewer
+            viewerContent.scrollBy({ top: -200, behavior: 'smooth' });
+          }
+          break;
+
+        case 'ArrowDown':
+          e.preventDefault();
+          if (video) {
+            // Decrease volume
+            video.volume = Math.max(0, video.volume - 0.1);
+          } else if (viewerContent) {
+            // Scroll down in viewer
+            viewerContent.scrollBy({ top: 200, behavior: 'smooth' });
+          }
+          break;
+
+        case ' ': // Spacebar
+          e.preventDefault();
+          if (video) {
+            // Play/pause video
+            if (video.paused) {
+              video.play();
+            } else {
+              video.pause();
+            }
+          } else if (viewerContent) {
+            // Page down
+            viewerContent.scrollBy({ top: viewerContent.clientHeight * 0.9, behavior: 'smooth' });
+          }
+          break;
+
+        case 'Home':
+          e.preventDefault();
+          if (video) {
+            video.currentTime = 0;
+          } else if (viewerContent) {
+            viewerContent.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+          break;
+
+        case 'End':
+          e.preventDefault();
+          if (video) {
+            video.currentTime = video.duration;
+          } else if (viewerContent) {
+            viewerContent.scrollTo({ top: viewerContent.scrollHeight, behavior: 'smooth' });
+          }
+          break;
+
+        case 'Escape':
+          // Close viewer and go back
+          window.location.href = '<?= h($closeUrl) ?>';
+          break;
+
+        case 'f':
+        case 'F':
+          // Toggle fullscreen for video
+          if (video) {
+            if (document.fullscreenElement) {
+              document.exitFullscreen();
+            } else {
+              video.requestFullscreen();
+            }
+          }
+          break;
+
+        case 'm':
+        case 'M':
+          // Mute/unmute video
+          if (video) {
+            video.muted = !video.muted;
+          }
+          break;
+      }
+    });
+
+    // Show keyboard shortcuts hint
+    const closeBtn = document.querySelector('.close-button');
+    if (closeBtn) {
+      const hint = document.createElement('span');
+      hint.className = 'keyboard-hint';
+      hint.innerHTML = ' <small style="opacity:0.7;font-size:0.75rem;">(Esc to close, arrows to navigate)</small>';
+      closeBtn.appendChild(hint);
+    }
   </script>
 </body>
 </html>

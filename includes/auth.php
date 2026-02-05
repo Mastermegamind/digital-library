@@ -34,6 +34,21 @@ function require_login() {
         header('Location: ' . app_path('login'));
         exit;
     }
+
+    $u = current_user();
+    if (($u['status'] ?? 'active') !== 'active') {
+        logout_user();
+        flash_message('error', 'Your account is not active.');
+        header('Location: ' . app_path('login'));
+        exit;
+    }
+
+    if (is_email_verification_required() && empty($u['email_verified_at'])) {
+        logout_user();
+        flash_message('error', 'Please verify your email before continuing.');
+        header('Location: ' . app_path('login'));
+        exit;
+    }
 }
 
 function require_admin() {

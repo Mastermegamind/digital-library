@@ -1,0 +1,14 @@
+{
+    "name": "cons-unth/elibrary",
+    "description": "CONS-UNTH E-Library",
+    "authors": [
+        {
+            "name": "Your Name",
+            "email": "your-email@example.com"
+        }
+    ],
+    "require": {
+        "symfony/mailer": "^8.0",
+        "symfony/mime": "^8.0"
+    }
+}

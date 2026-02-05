@@ -58,9 +58,24 @@ if ($headerFavicon === '') {
     $headerFavicon = app_path('assets/images/favicon.png');
 }
 $headerFavicon = $toAbsoluteUrl($headerFavicon);
+
+$body_class = trim((string)($body_class ?? ''));
+$body_class_attr = 'd-flex flex-column min-vh-100';
+if ($body_class !== '') {
+    $body_class_attr .= ' ' . $body_class;
+}
+
+// Get user's dark mode preference
+$headerDarkMode = false;
+if (is_logged_in()) {
+    $headerUser = current_user();
+    if ($headerUser) {
+        $headerDarkMode = get_user_dark_mode($headerUser['id']);
+    }
+}
 ?>
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="<?= $headerDarkMode ? 'dark' : 'light' ?>">
 <head>
     <meta charset="utf-8">
     <title><?php echo h($headerMetaTitle); ?></title>
@@ -88,290 +103,8 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
     <link rel="stylesheet" href="<?php echo h(app_path('assets/css/all.min.css')); ?>">
     <link rel="stylesheet" href="<?php echo h(app_path('assets/css/inter.css')); ?>">
     <link rel="stylesheet" href="<?php echo h(app_path('assets/css/components.css')); ?>">
-    <style>
-        :root {
---primary-color: #009D52;
---secondary-color: #187048;
---accent-color: #00A050;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --light-bg: #f8fafc;
-            --card-bg: #ffffff;
-            --text-primary: #1e293b;
-            --text-secondary: #64748b;
-            --border-color: #e2e8f0;
-            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
-            background-attachment: fixed;
-            color: var(--text-primary);
-            min-height: 100dvh;
-        }
-
-        /* Modern Navbar */
-        .navbar {
-            background: var(--secondary-color) !important;
-            backdrop-filter: blur(20px);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-            padding: clamp(0.65rem, 1.8vh, 1rem) 0;
-        }
-
-        .navbar-brand {
-            font-weight: 700;
-            font-size: 1.5rem;
-            color: var(--primary-color) !important;
-            letter-spacing: -0.5px;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            transition: all 0.3s ease;
-        }
-
-        .navbar-brand:hover {
-            transform: translateY(-2px);
-        }
-
-        .navbar-brand img {
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-        }
-
-        .nav-link {
-            color: var(--light-bg) !important;
-            font-weight: 500;
-            padding: 0.5rem 1rem !important;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .nav-link:hover {
-            background: var(--light-bg);
-            color: var(--primary-color) !important;
-        }
-
-        .nav-link.active {
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-            color: white !important;
-        }
-
-        
-
-        /* User Avatar */
-        .user-avatar {
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid white;
-            box-shadow: var(--shadow);
-            transition: all 0.3s ease;
-        }
-
-        .user-avatar:hover {
-            transform: scale(1.1);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .user-initial {
-            width: 42px;
-            height: 42px;
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 1.1rem;
-            box-shadow: var(--shadow);
-            transition: all 0.3s ease;
-        }
-
-        .user-initial:hover {
-            transform: scale(1.1);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .user-name {
-            font-weight: 600;
-            color: var(--light-bg);
-        }
-
-
-
-        .user-role {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            background: var(--light-bg);
-            padding: 0.125rem 0.5rem;
-            border-radius: 12px;
-        }
-
-        /* Toast Notifications */
-        .toast-container {
-            z-index: 9999;
-        }
-
-        .toast {
-            backdrop-filter: blur(10px);
-            border: none;
-            border-radius: 12px;
-            box-shadow: var(--shadow-xl);
-        }
-
-        .toast-body {
-            padding: 1rem 1.5rem;
-            font-weight: 500;
-        }
-
-        /* Buttons */
-        .btn {
-            font-weight: 600;
-            padding: clamp(0.5rem, 1.4vh, 0.625rem) clamp(1rem, 2vw, 1.5rem);
-            border-radius: 10px;
-            transition: all 0.3s ease;
-            border: none;
-            text-transform: none;
-            letter-spacing: 0.3px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #10b981, #059669);
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-        }
-
-        .btn-success:hover {
-            background: linear-gradient(135deg, #059669, #047857);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
-        }
-
-        .btn-outline-primary {
-            border: 2px solid var(--primary-color);
-            color: var(--primary-color);
-            background: transparent;
-        }
-
-        .btn-outline-primary:hover {
-            background: var(--primary-color);
-            color: white;
-            transform: translateY(-2px);
-        }
-
-        /* Main Container */
-        .main-container {
-            background: var(--light-bg);
-            min-height: calc(100dvh - 180px);
-            padding: clamp(1rem, 2.4vh, 2rem) 0;
-            border-radius: 30px 30px 0 0;
-            margin-top: clamp(0.75rem, 2vh, 2rem);
-            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1);
-        }
-
-        /* Cards */
-        .card {
-            border: none;
-            border-radius: 16px;
-            overflow: hidden;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            background: var(--card-bg);
-            box-shadow: var(--shadow);
-        }
-
-        .card:hover {
-            transform: translateY(-12px);
-            box-shadow: var(--shadow-xl);
-        }
-
-        /* Cover Image */
-        .cover-img {
-            width: 100%;
-            height: clamp(200px, 34vh, 280px);
-            object-fit: cover;
-            transition: all 0.4s ease;
-        }
-
-        .card:hover .cover-img {
-            transform: scale(1.05);
-        }
-
-        /* Footer */
-        footer {
-            background: linear-gradient(135deg, #1e293b, #334155);
-            color: white;
-            padding: 2rem 0;
-            margin-top: auto;
-            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
-        }
-
-        /* Responsive */
-        @media (max-width: 1366px), (max-height: 820px) {
-            .navbar-brand {
-                font-size: clamp(1.1rem, 2.2vw, 1.35rem);
-            }
-
-            .user-avatar,
-            .user-initial {
-                width: 38px;
-                height: 38px;
-            }
-
-            .main-container {
-                border-radius: 24px 24px 0 0;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .navbar-brand {
-                font-size: 1.25rem;
-            }
-            
-            .main-container {
-                border-radius: 20px 20px 0 0;
-                margin-top: 0.75rem;
-            }
-        }
-
-        /* Loading Animation */
-        @keyframes shimmer {
-            0% { background-position: -1000px 0; }
-            100% { background-position: 1000px 0; }
-        }
-
-        .skeleton {
-            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-            background-size: 1000px 100%;
-            animation: shimmer 2s infinite;
-        }
-    </style>
 </head>
-<body class="d-flex flex-column min-vh-100">
+<body class="<?php echo h($body_class_attr); ?>">
 
 <!-- Toast Container -->
 <div class="toast-container position-fixed top-0 end-0 p-3">
@@ -408,6 +141,26 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
                             <i class="fas fa-books me-2"></i>Library
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= h(app_path('dashboard')) ?>">
+                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= h(app_path('bookmarks')) ?>">
+                            <i class="fas fa-bookmark me-2"></i>Bookmarks
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= h(app_path('submit')) ?>">
+                            <i class="fas fa-upload me-2"></i>Submit
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= h(app_path('my-submissions')) ?>">
+                            <i class="fas fa-list me-2"></i>My Submissions
+                        </a>
+                    </li>
                     <?php if (is_admin()): ?>
                         <li class="nav-item">
                             <a class="nav-link" href="<?= h(app_path('admin')) ?>">
@@ -419,6 +172,12 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
             </ul>
             
             <ul class="navbar-nav ms-auto align-items-center">
+                <!-- Dark Mode Toggle -->
+                <li class="nav-item me-2">
+                    <button class="dark-mode-toggle" id="darkModeToggle" title="Toggle dark mode">
+                        <i class="fas <?= $headerDarkMode ? 'fa-sun' : 'fa-moon' ?>" id="darkModeIcon"></i>
+                    </button>
+                </li>
                 <?php if (is_logged_in()): $u = current_user(); ?>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
@@ -440,6 +199,13 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
                         </ul>
                     </li>
                 <?php else: ?>
+                    <?php if (is_registration_enabled()): ?>
+                        <li class="nav-item me-2">
+                            <a class="btn btn-outline-primary" href="<?= h(app_path('register')) ?>">
+                                <i class="fas fa-user-plus me-2"></i>Register
+                            </a>
+                        </li>
+                    <?php endif; ?>
                     <li class="nav-item">
                         <a class="btn btn-primary" href="<?= h(app_path('login')) ?>">
                             <i class="fas fa-sign-in-alt me-2"></i>Login

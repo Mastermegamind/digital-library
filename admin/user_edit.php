@@ -1,8 +1,12 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+$legacyId = (int)($_GET['id'] ?? 0);
+if ($legacyId > 0) {
+    redirect_legacy_php('admin/user/edit/' . $legacyId, ['id' => null]);
+}
 require_admin();
 
-$id = (int)($_GET['id'] ?? 0);
+$id = $legacyId;
 
 $stmt = $pdo->prepare("
     SELECT u.*, up.reg_no, up.enrollment_year, up.department,
@@ -211,7 +215,7 @@ include __DIR__ . '/../includes/header.php';
 <div class="page-header">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-            <h2 class="fw-bold mb-2" style="color:var(--primary-color);">
+            <h2 class="fw-bold mb-2 page-title">
                 <i class="fas fa-user-edit me-3"></i>Edit User Account
             </h2>
             <p class="text-muted mb-0">Updating: <strong><?= h($user['name']) ?></strong></p>
@@ -275,7 +279,7 @@ include __DIR__ . '/../includes/header.php';
         </div>
 
         <!-- Student Fields -->
-        <div class="form-section" id="student-fields" style="display:<?= $role==='student'?'block':'none' ?>;">
+        <div class="form-section role-section <?= $role==='student'?'is-visible':'is-hidden' ?>" id="student-fields">
             <h5 class="section-title"><i class="fas fa-id-card"></i> Student Details</h5>
             <div class="row g-4">
                 <div class="col-md-6">
@@ -300,7 +304,7 @@ include __DIR__ . '/../includes/header.php';
 
         <!-- Staff Fields -->
 <!-- Staff / Admin Fields -->
-<div class="form-section" id="staff-fields" style="display:<?= ($role==='staff' || $role==='admin') ? 'block' : 'none' ?>;">
+<div class="form-section role-section <?= ($role==='staff' || $role==='admin') ? 'is-visible' : 'is-hidden' ?>" id="staff-fields">
     <h5 class="section-title"><i class="fas fa-chalkboard-teacher"></i> Staff / Admin Details</h5>
 
             <div class="row g-4">
@@ -451,26 +455,30 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const studentFields = document.getElementById('student-fields');
+    const staffFields = document.getElementById('staff-fields');
+
+    function setVisibility(el, show) {
+        if (!el) return;
+        el.classList.toggle('is-hidden', !show);
+        el.classList.toggle('is-visible', show);
+    }
+
     // Role toggle
-// Role toggle
-document.querySelectorAll('input[name="role"]').forEach(r => {
-    r.addEventListener('change', () => {
-        const studentFields = document.getElementById('student-fields');
-        const staffFields   = document.getElementById('staff-fields');
-
-        if (r.checked) {
-            studentFields.style.display = r.value === 'student' ? 'block' : 'none';
-            // Show for BOTH staff and admin
-            staffFields.style.display   = (r.value === 'staff' || r.value === 'admin') ? 'block' : 'none';
-        }
+    document.querySelectorAll('input[name="role"]').forEach(r => {
+        r.addEventListener('change', () => {
+            if (r.checked) {
+                setVisibility(studentFields, r.value === 'student');
+                setVisibility(staffFields, r.value === 'staff' || r.value === 'admin');
+            }
+        });
     });
-});
 
-// Trigger on load for current role
-const currentRoleInput = document.querySelector(`input[name="role"][value="<?= $role ?>"]`);
-if (currentRoleInput) {
-    currentRoleInput.dispatchEvent(new Event('change'));
-}
+    // Trigger on load for current role
+    const currentRoleInput = document.querySelector(`input[name="role"][value="<?= $role ?>"]`);
+    if (currentRoleInput) {
+        currentRoleInput.dispatchEvent(new Event('change'));
+    }
 
 });
 </script>
