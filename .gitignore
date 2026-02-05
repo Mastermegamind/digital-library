@@ -1,0 +1,44 @@
+# PHP
+*.php~
+*.phtml
+/.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# XAMPP & Server
+php.ini.local
+.DS_Store
+
+# Database
+*.sql
+*.db
+*.sqlite
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# Logs
+logs/*
+!logs/.gitkeep
+
+# Sensitive files
+includes/config.php
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Assets - optional (keep if needed)
+# Uncomment to exclude heavy assets
+# assets/pdfjs/
+# assets/bootstrap/
