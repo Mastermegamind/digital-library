@@ -62,6 +62,15 @@ $countStmt = $pdo->prepare($countSql);
 $countStmt->execute($params);
 $totalResources = (int)$countStmt->fetch(PDO::FETCH_ASSOC)['total'];
 
+if ($page === 1) {
+    $logFilters = [
+        'category' => $category,
+        'type' => $type,
+        'sort' => $sort,
+    ];
+    log_search_query($currentUser['id'] ?? null, $search, $logFilters, $totalResources);
+}
+
 // Calculate pagination
 $totalPages = max(1, (int)ceil($totalResources / $perPage));
 $page = min($page, $totalPages); // Ensure page doesn't exceed total pages
@@ -108,6 +117,64 @@ if ($currentUser) {
     $userProgress = get_user_progress($currentUser['id']);
 }
 
+$featuredSections = [
+    'featured' => ['title' => 'Featured', 'icon' => 'star', 'limit' => 4],
+    'editors_picks' => ['title' => "Editor's Picks", 'icon' => 'award', 'limit' => 4],
+    'new_this_week' => ['title' => 'New This Week', 'icon' => 'calendar-alt', 'limit' => 4],
+];
+
+$featuredResources = [];
+foreach ($featuredSections as $sectionKey => $sectionConfig) {
+    $sectionSql = "SELECT r.*, c.name AS category_name
+                   FROM featured_resources fr
+                   JOIN resources r ON fr.resource_id = r.id
+                   LEFT JOIN categories c ON r.category_id = c.id
+                   WHERE fr.section = :section
+                     AND (fr.starts_at IS NULL OR fr.starts_at <= CURRENT_TIMESTAMP)
+                     AND (fr.ends_at IS NULL OR fr.ends_at >= CURRENT_TIMESTAMP)";
+    if (!$isAdmin) {
+        $sectionSql .= " AND r.status = 'approved'";
+    }
+    $sectionSql .= " ORDER BY fr.sort_order ASC, fr.created_at DESC LIMIT :limit";
+
+    $stmt = $pdo->prepare($sectionSql);
+    $stmt->bindValue(':section', $sectionKey);
+    $stmt->bindValue(':limit', (int)$sectionConfig['limit'], PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (!empty($rows)) {
+        $featuredResources[$sectionKey] = $rows;
+    }
+}
+
+$trendingResources = get_trending_resources(6, 14);
+if (!empty($featuredResources) && !empty($trendingResources)) {
+    $featuredIds = [];
+    foreach ($featuredResources as $sectionItems) {
+        foreach ($sectionItems as $item) {
+            $featuredIds[(int)$item['id']] = true;
+        }
+    }
+    $trendingResources = array_values(array_filter($trendingResources, function ($row) use ($featuredIds) {
+        return empty($featuredIds[(int)$row['id']]);
+    }));
+    $trendingResources = array_slice($trendingResources, 0, 6);
+}
+
+$resourceIds = [];
+foreach ($resources as $row) {
+    $resourceIds[] = (int)$row['id'];
+}
+foreach ($featuredResources as $sectionItems) {
+    foreach ($sectionItems as $row) {
+        $resourceIds[] = (int)$row['id'];
+    }
+}
+foreach ($trendingResources as $row) {
+    $resourceIds[] = (int)$row['id'];
+}
+$tagsByResource = get_tags_for_resources($resourceIds);
+
 // Build query string for pagination links
 function buildQueryString($overrides = []) {
     $params = [
@@ -120,6 +187,107 @@ function buildQueryString($overrides = []) {
     $params = array_merge($params, $overrides);
     $params = array_filter($params, fn($v) => $v !== '');
     return http_build_query($params);
+}
+
+function render_resource_card(array $r, array $userBookmarks, array $userProgress, string $context = 'main', array $tagsByResource = []): void {
+    $contextSafe = preg_replace('/[^a-zA-Z0-9_-]/', '', $context);
+    if ($contextSafe === '') {
+        $contextSafe = 'main';
+    }
+    $cover = !empty($r['cover_image_path'])
+        ? app_path($r['cover_image_path'])
+        : 'https://via.placeholder.com/400x280/667eea/ffffff?text=' . urlencode($r['title']);
+    $typeColors = [
+        'pdf' => 'danger',
+        'document' => 'primary',
+        'video' => 'warning',
+        'link' => 'info',
+        'image' => 'success'
+    ];
+    $badgeColor = $typeColors[$r['type']] ?? 'secondary';
+    $isBookmarked = in_array($r['id'], $userBookmarks);
+    $progress = $userProgress[$r['id']] ?? null;
+    $progressPercent = $progress ? (float)$progress['percent'] : 0;
+    $tags = $tagsByResource[$r['id']] ?? [];
+    $displayTags = array_slice($tags, 0, 3);
+    $extraTags = max(0, count($tags) - count($displayTags));
+    $modalId = 'coverModal' . $contextSafe . $r['id'];
+    ?>
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+        <div class="resource-card">
+            <div class="resource-image-wrapper">
+                <img src="<?= h($cover) ?>" class="resource-image resource-zoomable" alt="<?= h($r['title']) ?>" loading="lazy"
+                     data-bs-toggle="modal" data-bs-target="#<?= h($modalId) ?>"
+                >
+                <span class="resource-badge text-<?= h($badgeColor) ?>">
+                    <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : ($r['type'] === 'link' ? 'link' : 'file-alt')) ?> me-1"></i>
+                    <?= strtoupper($r['type']) ?>
+                </span>
+                <?php if ($progressPercent > 0): ?>
+                    <div class="progress-indicator">
+                        <div class="progress-indicator-bar" style="width: <?= min(100, $progressPercent) ?>%"></div>
+                    </div>
+                    <span class="progress-badge">
+                        <i class="fas fa-book-reader"></i>
+                        <?= round($progressPercent) ?>%
+                    </span>
+                <?php endif; ?>
+            </div>
+
+            <div class="resource-body">
+                <h5 class="resource-title"><?= h($r['title']) ?></h5>
+
+                <?php if (!empty($r['category_name'])): ?>
+                    <span class="resource-category">
+                        <i class="fas fa-folder"></i>
+                        <?= h($r['category_name']) ?>
+                    </span>
+                <?php endif; ?>
+
+                <?php if (!empty($r['description'])): ?>
+                    <p class="resource-description"><?= h($r['description']) ?></p>
+                <?php endif; ?>
+
+                <?php if (!empty($displayTags)): ?>
+                    <div class="d-flex flex-wrap gap-1 mb-2">
+                        <?php foreach ($displayTags as $tag): ?>
+                            <span class="badge bg-light text-muted">#<?= h($tag) ?></span>
+                        <?php endforeach; ?>
+                        <?php if ($extraTags > 0): ?>
+                            <span class="badge bg-secondary">+<?= $extraTags ?></span>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <div class="resource-actions">
+                    <a href="<?= h(app_path('viewer/' . $r['id'])) ?>" class="btn btn-primary flex-grow-1">
+                        <i class="fas fa-eye me-2"></i><?= $progressPercent > 0 ? 'Continue' : 'Open' ?>
+                    </a>
+                    <button class="bookmark-btn <?= $isBookmarked ? 'bookmarked' : '' ?>"
+                            data-resource-id="<?= (int)$r['id'] ?>"
+                            data-bookmarked="<?= $isBookmarked ? '1' : '0' ?>"
+                            title="<?= $isBookmarked ? 'Remove bookmark' : 'Add bookmark' ?>">
+                        <i class="<?= $isBookmarked ? 'fas' : 'far' ?> fa-bookmark"></i>
+                    </button>
+                    <?php if (is_admin()): ?>
+                        <a href="<?= h(app_path('admin/resource/edit/' . $r['id'])) ?>" class="btn btn-outline-secondary">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade zoom-modal" id="<?= h($modalId) ?>" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 modal-close-overlay" data-bs-dismiss="modal"></button>
+                <img src="<?= h($cover) ?>" class="img-fluid" alt="<?= h($r['title']) ?>">
+            </div>
+        </div>
+    </div>
+    <?php
 }
 
 $meta_title = $APP_NAME . ' - Library';
@@ -186,6 +354,41 @@ include __DIR__ . '/includes/header.php';
         </div>
     </div>
 </div>
+
+<?php if (!empty($featuredResources)): ?>
+    <?php foreach ($featuredResources as $sectionKey => $sectionItems): ?>
+        <?php $sectionMeta = $featuredSections[$sectionKey] ?? ['title' => ucfirst($sectionKey), 'icon' => 'star']; ?>
+        <div class="dashboard-section">
+            <div class="dashboard-section-header">
+                <h2>
+                    <i class="fas fa-<?= h($sectionMeta['icon']) ?> text-warning me-2"></i>
+                    <?= h($sectionMeta['title']) ?>
+                </h2>
+            </div>
+            <div class="row g-4 mb-4">
+                <?php foreach ($sectionItems as $r): ?>
+                    <?php render_resource_card($r, $userBookmarks, $userProgress, 'section-' . $sectionKey, $tagsByResource); ?>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endforeach; ?>
+<?php endif; ?>
+
+<?php if (!empty($trendingResources)): ?>
+    <div class="dashboard-section">
+        <div class="dashboard-section-header">
+            <h2>
+                <i class="fas fa-fire text-danger me-2"></i>
+                Trending Now
+            </h2>
+        </div>
+        <div class="row g-4 mb-4">
+            <?php foreach ($trendingResources as $r): ?>
+                <?php render_resource_card($r, $userBookmarks, $userProgress, 'trending', $tagsByResource); ?>
+            <?php endforeach; ?>
+        </div>
+    </div>
+<?php endif; ?>
 
 <!-- Search & Filter Section -->
 <div class="search-container">
@@ -297,84 +500,7 @@ include __DIR__ . '/includes/header.php';
 <?php else: ?>
     <div class="row g-4 mb-4">
         <?php foreach ($resources as $r): ?>
-            <?php
-                $cover = !empty($r['cover_image_path']) ? app_path($r['cover_image_path']) : 'https://via.placeholder.com/400x280/667eea/ffffff?text=' . urlencode($r['title']);
-                $typeColors = [
-                    'pdf' => 'danger',
-                    'document' => 'primary',
-                    'video' => 'warning',
-                    'link' => 'info',
-                    'image' => 'success'
-                ];
-                $badgeColor = $typeColors[$r['type']] ?? 'secondary';
-                $isBookmarked = in_array($r['id'], $userBookmarks);
-                $progress = $userProgress[$r['id']] ?? null;
-                $progressPercent = $progress ? (float)$progress['percent'] : 0;
-            ?>
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-                <div class="resource-card">
-                    <div class="resource-image-wrapper">
-                        <img src="<?= h($cover) ?>" class="resource-image resource-zoomable" alt="<?= h($r['title']) ?>" loading="lazy"
-                             data-bs-toggle="modal" data-bs-target="#coverModal<?= $r['id'] ?>"
-                        >
-                        <span class="resource-badge text-<?= $badgeColor ?>">
-                            <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : ($r['type'] === 'link' ? 'link' : 'file-alt')) ?> me-1"></i>
-                            <?= strtoupper($r['type']) ?>
-                        </span>
-                        <?php if ($progressPercent > 0): ?>
-                            <div class="progress-indicator">
-                                <div class="progress-indicator-bar" style="width: <?= min(100, $progressPercent) ?>%"></div>
-                            </div>
-                            <span class="progress-badge">
-                                <i class="fas fa-book-reader"></i>
-                                <?= round($progressPercent) ?>%
-                            </span>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="resource-body">
-                        <h5 class="resource-title"><?= h($r['title']) ?></h5>
-
-                        <?php if ($r['category_name']): ?>
-                            <span class="resource-category">
-                                <i class="fas fa-folder"></i>
-                                <?= h($r['category_name']) ?>
-                            </span>
-                        <?php endif; ?>
-
-                        <?php if (!empty($r['description'])): ?>
-                            <p class="resource-description"><?= h($r['description']) ?></p>
-                        <?php endif; ?>
-
-                        <div class="resource-actions">
-                            <a href="<?= h(app_path('viewer/' . $r['id'])) ?>" class="btn btn-primary flex-grow-1">
-                                <i class="fas fa-eye me-2"></i><?= $progressPercent > 0 ? 'Continue' : 'Open' ?>
-                            </a>
-                            <button class="bookmark-btn <?= $isBookmarked ? 'bookmarked' : '' ?>"
-                                    data-resource-id="<?= $r['id'] ?>"
-                                    data-bookmarked="<?= $isBookmarked ? '1' : '0' ?>"
-                                    title="<?= $isBookmarked ? 'Remove bookmark' : 'Add bookmark' ?>">
-                                <i class="<?= $isBookmarked ? 'fas' : 'far' ?> fa-bookmark"></i>
-                            </button>
-                            <?php if (is_admin()): ?>
-                                <a href="<?= h(app_path('admin/resource/edit/' . $r['id'])) ?>" class="btn btn-outline-secondary">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Zoom Modal -->
-            <div class="modal fade zoom-modal" id="coverModal<?= $r['id'] ?>" tabindex="-1">
-                <div class="modal-dialog modal-dialog-centered modal-lg">
-                    <div class="modal-content">
-                        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 modal-close-overlay" data-bs-dismiss="modal"></button>
-                        <img src="<?= h($cover) ?>" class="img-fluid" alt="<?= h($r['title']) ?>">
-                    </div>
-                </div>
-            </div>
+            <?php render_resource_card($r, $userBookmarks, $userProgress, 'main', $tagsByResource); ?>
         <?php endforeach; ?>
     </div>
 

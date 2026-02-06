@@ -65,8 +65,39 @@ switch ($ext) {
         break;
 }
 
-header('Content-Length: ' . filesize($fullPath));
-header('X-Accel-Buffering: no');
+$fileSize = filesize($fullPath);
+header('Accept-Ranges: bytes');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
+// Handle range requests for video streaming
+if (isset($_SERVER['HTTP_RANGE']) && in_array($ext, ['mp4', 'webm'])) {
+    $range = $_SERVER['HTTP_RANGE'];
+    if (preg_match('/bytes=(\d*)-(\d*)/', $range, $matches)) {
+        $start = $matches[1] === '' ? 0 : (int)$matches[1];
+        $end = $matches[2] === '' ? $fileSize - 1 : (int)$matches[2];
+
+        if ($start > $end || $start >= $fileSize) {
+            http_response_code(416);
+            header("Content-Range: bytes */$fileSize");
+            exit;
+        }
+
+        $end = min($end, $fileSize - 1);
+        $length = $end - $start + 1;
+
+        http_response_code(206);
+        header("Content-Range: bytes $start-$end/$fileSize");
+        header("Content-Length: $length");
+
+        $fp = fopen($fullPath, 'rb');
+        fseek($fp, $start);
+        echo fread($fp, $length);
+        fclose($fp);
+        exit;
+    }
+}
+
+header('Content-Length: ' . $fileSize);
+header('X-Accel-Buffering: no');
 readfile($fullPath);
 exit;

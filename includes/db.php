@@ -36,6 +36,15 @@ try {
     $uniqueReviewConstraint = ($DB_DRIVER === 'mysql')
         ? 'UNIQUE KEY unique_review (resource_id, user_id)'
         : 'UNIQUE(resource_id, user_id)';
+    $uniqueFeaturedConstraint = ($DB_DRIVER === 'mysql')
+        ? 'UNIQUE KEY unique_featured (resource_id, section)'
+        : 'UNIQUE(resource_id, section)';
+    $uniqueTagConstraint = ($DB_DRIVER === 'mysql')
+        ? 'UNIQUE KEY unique_tag (slug)'
+        : 'UNIQUE(slug)';
+    $uniqueResourceTagConstraint = ($DB_DRIVER === 'mysql')
+        ? 'UNIQUE KEY unique_resource_tag (resource_id, tag_id)'
+        : 'UNIQUE(resource_id, tag_id)';
 
     $columnExists = function (string $table, string $column) use ($pdo, $DB_DRIVER): bool {
         if ($DB_DRIVER === 'mysql') {
@@ -191,6 +200,9 @@ try {
     $insertSetting->execute([':k' => 'registration_enabled', ':v' => '1']);
     $insertSetting->execute([':k' => 'registration_mode', ':v' => ($STUDENT_REGISTRATION_MODE ?? 'open')]);
     $insertSetting->execute([':k' => 'require_email_verification', ':v' => '1']);
+    $insertSetting->execute([':k' => 'notifications_inapp_enabled', ':v' => '1']);
+    $insertSetting->execute([':k' => 'notifications_email_enabled', ':v' => '0']);
+    $insertSetting->execute([':k' => 'notifications_phone_enabled', ':v' => '0']);
 
     // Resource reviews (ratings + optional review)
     $pdo->exec("
@@ -224,6 +236,29 @@ try {
         )$tableOptions;
     ");
 
+    // Tags and resource tags
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS tags (
+            id $primaryKeyDef,
+            name VARCHAR(100) NOT NULL,
+            slug VARCHAR(120) NOT NULL,
+            created_at $createdAtColumn,
+            $uniqueTagConstraint
+        )$tableOptions;
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS resource_tags (
+            id $primaryKeyDef,
+            resource_id $foreignKeyType NOT NULL,
+            tag_id $foreignKeyType NOT NULL,
+            created_at $createdAtColumn,
+            $uniqueResourceTagConstraint,
+            FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+            FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+
     // Content reports (comments/reviews)
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS resource_reports (
@@ -234,6 +269,78 @@ try {
             reason TEXT,
             created_at $createdAtColumn,
             FOREIGN KEY(reported_by) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+
+    // Resource view analytics
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS resource_views (
+            id $primaryKeyDef,
+            resource_id $foreignKeyType NOT NULL,
+            user_id $foreignKeyType NULL,
+            session_id VARCHAR(64) NULL,
+            created_at $createdAtColumn,
+            FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+        )$tableOptions;
+    ");
+
+    // Resource download analytics
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS resource_downloads (
+            id $primaryKeyDef,
+            resource_id $foreignKeyType NOT NULL,
+            user_id $foreignKeyType NULL,
+            session_id VARCHAR(64) NULL,
+            created_at $createdAtColumn,
+            FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+        )$tableOptions;
+    ");
+
+    // Search analytics
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS search_logs (
+            id $primaryKeyDef,
+            user_id $foreignKeyType NULL,
+            query TEXT,
+            filters TEXT,
+            results_count INT DEFAULT 0,
+            created_at $createdAtColumn,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+        )$tableOptions;
+    ");
+
+    // In-app notifications
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS notifications (
+            id $primaryKeyDef,
+            user_id $foreignKeyType NOT NULL,
+            type VARCHAR(50) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            body TEXT,
+            link TEXT,
+            created_at $createdAtColumn,
+            read_at DATETIME NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+
+    // Featured resources (curated homepage sections)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS featured_resources (
+            id $primaryKeyDef,
+            resource_id $foreignKeyType NOT NULL,
+            section VARCHAR(50) NOT NULL,
+            sort_order INT DEFAULT 0,
+            starts_at DATETIME NULL,
+            ends_at DATETIME NULL,
+            created_by $foreignKeyType NULL,
+            created_at $createdAtColumn,
+            updated_at $createdAtColumn,
+            $uniqueFeaturedConstraint,
+            FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+            FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
         )$tableOptions;
     ");
 
@@ -265,6 +372,66 @@ try {
     try {
         if ($DB_DRIVER === 'mysql') {
             $pdo->exec("CREATE INDEX idx_comments_status ON resource_comments(status)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_featured_section ON featured_resources(section, sort_order)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_resource_views_resource_date ON resource_views(resource_id, created_at)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_resource_views_user_date ON resource_views(user_id, created_at)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_resource_downloads_resource_date ON resource_downloads(resource_id, created_at)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_resource_downloads_user_date ON resource_downloads(user_id, created_at)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_search_logs_created ON search_logs(created_at)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_notifications_user_read ON notifications(user_id, read_at, created_at)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_tags_slug ON tags(slug)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_resource_tags_resource ON resource_tags(resource_id)");
+        }
+    } catch (PDOException $e) { /* Index may already exist */ }
+
+    try {
+        if ($DB_DRIVER === 'mysql') {
+            $pdo->exec("CREATE INDEX idx_resource_tags_tag ON resource_tags(tag_id)");
         }
     } catch (PDOException $e) { /* Index may already exist */ }
 

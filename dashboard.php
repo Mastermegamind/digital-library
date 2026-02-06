@@ -61,6 +61,14 @@ $bookmarkedResources = $bookmarkStmt->fetchAll(PDO::FETCH_ASSOC);
 // Get user's bookmarks for bookmark button display
 $userBookmarks = get_user_bookmarks($user['id']);
 
+$tagIds = [];
+foreach ([$inProgressResources, $recentResources, $bookmarkedResources] as $group) {
+    foreach ($group as $row) {
+        $tagIds[] = (int)$row['id'];
+    }
+}
+$tagsByResource = get_tags_for_resources($tagIds);
+
 $meta_title = 'My Dashboard - ' . $APP_NAME;
 include __DIR__ . '/includes/header.php';
 ?>
@@ -127,6 +135,14 @@ include __DIR__ . '/includes/header.php';
                             <i class="fas fa-chart-pie me-1"></i>
                             <?= round($r['progress_percent']) ?>% complete
                         </div>
+                        <?php $tags = $tagsByResource[$r['id']] ?? []; ?>
+                        <?php if (!empty($tags)): ?>
+                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                <?php foreach (array_slice($tags, 0, 2) as $tag): ?>
+                                    <span class="badge bg-light text-muted">#<?= h($tag) ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <i class="fas fa-chevron-right ms-auto"></i>
                 </a>
@@ -192,6 +208,17 @@ include __DIR__ . '/includes/header.php';
                                     <?= h($r['category_name']) ?>
                                 </span>
                             <?php endif; ?>
+                            <?php $tags = $tagsByResource[$r['id']] ?? []; ?>
+                            <?php if (!empty($tags)): ?>
+                                <div class="d-flex flex-wrap gap-1 mb-2">
+                                    <?php foreach (array_slice($tags, 0, 3) as $tag): ?>
+                                        <span class="badge bg-light text-muted">#<?= h($tag) ?></span>
+                                    <?php endforeach; ?>
+                                    <?php if (count($tags) > 3): ?>
+                                        <span class="badge bg-secondary">+<?= count($tags) - 3 ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
                             <div class="resource-actions">
                                 <a href="<?= h(app_path('viewer/' . $r['id'])) ?>" class="btn btn-primary flex-grow-1">
                                     <i class="fas fa-eye me-2"></i><?= $progressPercent > 0 ? 'Continue' : 'Open' ?>
@@ -255,6 +282,17 @@ include __DIR__ . '/includes/header.php';
                                     <i class="fas fa-folder"></i>
                                     <?= h($r['category_name']) ?>
                                 </span>
+                            <?php endif; ?>
+                            <?php $tags = $tagsByResource[$r['id']] ?? []; ?>
+                            <?php if (!empty($tags)): ?>
+                                <div class="d-flex flex-wrap gap-1 mb-2">
+                                    <?php foreach (array_slice($tags, 0, 3) as $tag): ?>
+                                        <span class="badge bg-light text-muted">#<?= h($tag) ?></span>
+                                    <?php endforeach; ?>
+                                    <?php if (count($tags) > 3): ?>
+                                        <span class="badge bg-secondary">+<?= count($tags) - 3 ?></span>
+                                    <?php endif; ?>
+                                </div>
                             <?php endif; ?>
                             <div class="resource-actions">
                                 <a href="<?= h(app_path('viewer/' . $r['id'])) ?>" class="btn btn-primary flex-grow-1">

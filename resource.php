@@ -120,6 +120,10 @@ $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
 $baseUrl = $scheme . '://' . $host . $basePath . '/';
 
 $fileUrl = $filePath ? $baseUrl . $filePath : null;
+$viewerUrl = app_path('viewer/' . $id);
+$downloadUrl = (!empty($filePath) && !in_array($type, ['link','video_link'], true))
+    ? app_path('download/' . $id)
+    : null;
 
 $ratingSummary = get_resource_rating_summary($id);
 $userReview = $user ? get_user_review($id, $user['id']) : null;
@@ -131,6 +135,10 @@ foreach ($comments as $comment) {
     $commentsByParent[$parentKey][] = $comment;
 }
 
+$resourceTags = get_resource_tags($id);
+$similarResources = get_similar_resources($id, 4);
+$similarTags = get_tags_for_resources(array_column($similarResources, 'id'));
+
 include __DIR__ . '/includes/header.php';
 ?>
 <h3 class="mb-1"><?php echo h($title); ?></h3>
@@ -141,6 +149,29 @@ include __DIR__ . '/includes/header.php';
 <?php if (!empty($resource['creator_name'])): ?>
   <span class="badge bg-light text-muted">by <?php echo h($resource['creator_name']); ?></span>
 <?php endif; ?>
+<?php if (!empty($resourceTags)): ?>
+  <div class="d-flex flex-wrap gap-1 mt-2">
+    <?php foreach ($resourceTags as $tag): ?>
+      <span class="badge bg-light text-muted">#<?= h($tag) ?></span>
+    <?php endforeach; ?>
+  </div>
+<?php endif; ?>
+
+<div class="d-flex flex-wrap gap-2 mt-3">
+  <a href="<?php echo h($viewerUrl); ?>" class="btn btn-primary">
+    <i class="fas fa-eye me-2"></i>Open in Viewer
+  </a>
+  <?php if ($downloadUrl): ?>
+    <a href="<?php echo h($downloadUrl); ?>" class="btn btn-outline-secondary">
+      <i class="fas fa-download me-2"></i>Download
+    </a>
+  <?php endif; ?>
+  <?php if ($externalUrl): ?>
+    <a href="<?php echo h($externalUrl); ?>" target="_blank" rel="noopener" class="btn btn-outline-info">
+      <i class="fas fa-external-link-alt me-2"></i>Open Link
+    </a>
+  <?php endif; ?>
+</div>
 
 <?php if (!empty($resource['description'])): ?>
   <p class="mt-3"><?php echo nl2br(h($resource['description'])); ?></p>
@@ -213,6 +244,63 @@ include __DIR__ . '/includes/header.php';
 
 <?php endif; ?>
 </div>
+
+<?php if (!empty($similarResources)): ?>
+  <div class="dashboard-section mt-4">
+    <div class="dashboard-section-header">
+      <h2><i class="fas fa-lightbulb me-2 text-warning"></i>Similar Resources</h2>
+    </div>
+    <div class="row g-4 mb-4">
+      <?php foreach ($similarResources as $sim): ?>
+        <?php
+          $simCover = !empty($sim['cover_image_path'])
+              ? app_path($sim['cover_image_path'])
+              : 'https://via.placeholder.com/400x280/667eea/ffffff?text=' . urlencode($sim['title']);
+          $simBadgeColor = 'secondary';
+          if (!empty($sim['type'])) {
+            $simBadgeColor = str_contains($sim['type'], 'pdf') ? 'danger' : (str_contains($sim['type'], 'video') ? 'warning' : 'primary');
+          }
+          $simTags = $similarTags[$sim['id']] ?? [];
+          $simDisplayTags = array_slice($simTags, 0, 2);
+        ?>
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+          <div class="resource-card">
+            <div class="resource-image-wrapper">
+              <img src="<?= h($simCover) ?>" class="resource-image" alt="<?= h($sim['title']) ?>" loading="lazy">
+              <span class="resource-badge text-<?= h($simBadgeColor) ?>">
+                <i class="fas fa-book me-1"></i><?= strtoupper($sim['type'] ?? 'FILE') ?>
+              </span>
+            </div>
+            <div class="resource-body">
+              <h5 class="resource-title"><?= h($sim['title']) ?></h5>
+              <?php if (!empty($sim['category_name'])): ?>
+                <span class="resource-category">
+                  <i class="fas fa-folder"></i>
+                  <?= h($sim['category_name']) ?>
+                </span>
+              <?php endif; ?>
+              <?php if (!empty($simDisplayTags)): ?>
+                <div class="d-flex flex-wrap gap-1 mb-2">
+                  <?php foreach ($simDisplayTags as $tag): ?>
+                    <span class="badge bg-light text-muted">#<?= h($tag) ?></span>
+                  <?php endforeach; ?>
+                  <?php if (count($simTags) > 2): ?>
+                    <span class="badge bg-secondary">+<?= count($simTags) - 2 ?></span>
+                  <?php endif; ?>
+                </div>
+              <?php endif; ?>
+              <div class="resource-actions">
+                <a href="<?= h(app_path('viewer/' . $sim['id'])) ?>" class="btn btn-primary flex-grow-1">
+                  <i class="fas fa-eye me-2"></i>Open
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+<?php endif; ?>
 
 <?php
 $renderStars = function (int $rating) {

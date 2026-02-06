@@ -35,13 +35,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':id' => $id,
             ]);
 
-            $infoStmt = $pdo->prepare("SELECT r.title, u.email, u.name
+            $infoStmt = $pdo->prepare("SELECT r.title, r.created_by, u.email, u.name
                                        FROM resources r
                                        LEFT JOIN users u ON r.created_by = u.id
                                        WHERE r.id = :id");
             $infoStmt->execute([':id' => $id]);
             $info = $infoStmt->fetch(PDO::FETCH_ASSOC);
-            if ($info && !empty($info['email']) && mailer_is_configured()) {
+            if ($info && !empty($info['email']) && mailer_is_configured() && is_email_notifications_enabled()) {
                 $subject = 'Resource Submission Update - ' . $APP_NAME;
                 $statusLabel = ucwords(str_replace('_', ' ', $status));
                 $body = '<p>Hello ' . h($info['name'] ?? 'there') . ',</p>'
@@ -52,6 +52,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $body .= '<p><strong>Notes from reviewer:</strong><br>' . nl2br(h($notes)) . '</p>';
                 }
                 send_app_mail($info['email'], $subject, $body);
+            }
+
+            if (!empty($info['created_by'])) {
+                $creatorId = (int)$info['created_by'];
+                if ($status === 'approved') {
+                    create_notification(
+                        $creatorId,
+                        'submission_approved',
+                        'Your submission was approved',
+                        $info['title'] ?? 'Resource approved',
+                        app_path('resource/' . $id)
+                    );
+                } elseif ($status === 'changes_requested') {
+                    create_notification(
+                        $creatorId,
+                        'submission_changes',
+                        'Changes requested on your submission',
+                        $info['title'] ?? 'Please review notes',
+                        app_path('my-submissions')
+                    );
+                } elseif ($status === 'rejected') {
+                    create_notification(
+                        $creatorId,
+                        'submission_rejected',
+                        'Your submission was rejected',
+                        $info['title'] ?? 'Submission rejected',
+                        app_path('my-submissions')
+                    );
+                }
+            }
+
+            if ($status === 'approved') {
+                notify_all_users(
+                    'resource_new',
+                    'New resource available',
+                    $info['title'] ?? 'A new resource has been added',
+                    app_path('resource/' . $id),
+                    !empty($info['created_by']) ? (int)$info['created_by'] : null
+                );
+
+                $resourceLink = app_url('resource/' . $id);
+                $emailSubject = 'New resource available - ' . $APP_NAME;
+                $emailTitle = $info['title'] ?? 'A new resource has been added';
+                $emailHtml = '<p>A new resource is now available.</p>'
+                    . '<p><strong>' . h($emailTitle) . '</strong></p>'
+                    . '<p><a href="' . h($resourceLink) . '">View resource</a></p>';
+                $emailText = "A new resource is now available.\n\n{$emailTitle}\n{$resourceLink}";
+                notify_all_users_email($emailSubject, $emailHtml, $emailText, !empty($info['created_by']) ? (int)$info['created_by'] : null);
             }
 
             flash_message('success', 'Resource status updated.');

@@ -53,6 +53,9 @@ include __DIR__ . '/../includes/header.php';
             <a href="<?= h(app_path('admin/moderation')) ?>" class="btn btn-outline-primary">
                 <i class="fas fa-gavel me-2"></i>Moderation
             </a>
+            <a href="<?= h(app_path('admin/featured')) ?>" class="btn btn-outline-warning">
+                <i class="fas fa-star me-2"></i>Featured
+            </a>
             <a href="<?= h(app_path('admin/resource/add')) ?>" class="btn btn-success">
                 <i class="fas fa-plus-circle me-2"></i>Add Resource
             </a>

@@ -18,10 +18,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $requireVerification = !empty($_POST['require_email_verification']) ? '1' : '0';
+    $notificationsInApp = !empty($_POST['notifications_inapp_enabled']) ? '1' : '0';
+    $notificationsEmail = !empty($_POST['notifications_email_enabled']) ? '1' : '0';
+    $notificationsPhone = !empty($_POST['notifications_phone_enabled']) ? '1' : '0';
 
     set_app_setting('registration_enabled', $registrationEnabled);
     set_app_setting('registration_mode', $registrationMode);
     set_app_setting('require_email_verification', $requireVerification);
+    set_app_setting('notifications_inapp_enabled', $notificationsInApp);
+    set_app_setting('notifications_email_enabled', $notificationsEmail);
+    set_app_setting('notifications_phone_enabled', $notificationsPhone);
 
     flash_message('success', 'Settings updated.');
     header('Location: ' . app_path('admin/settings'));
@@ -32,6 +38,9 @@ $csrf = get_csrf_token();
 $registrationEnabled = is_registration_enabled();
 $registrationMode = get_registration_mode();
 $requireVerification = is_email_verification_required();
+$notificationsInApp = is_inapp_notifications_enabled();
+$notificationsEmail = is_email_notifications_enabled();
+$notificationsPhone = is_phone_notifications_enabled();
 
 $meta_title = 'Settings - Admin | ' . $APP_NAME;
 include __DIR__ . '/../includes/header.php';
@@ -77,6 +86,25 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <small class="text-muted d-block mt-2">
                 Ensure mailer settings are configured in `includes/config.php`.
+            </small>
+        </div>
+
+        <div class="form-section">
+            <h5 class="section-title"><i class="fas fa-bell"></i>Notifications</h5>
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="notificationsInApp" name="notifications_inapp_enabled" <?= $notificationsInApp ? 'checked' : '' ?>>
+                <label class="form-check-label" for="notificationsInApp">Enable in-app (profile) notifications</label>
+            </div>
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="notificationsEmail" name="notifications_email_enabled" <?= $notificationsEmail ? 'checked' : '' ?>>
+                <label class="form-check-label" for="notificationsEmail">Enable email notifications</label>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="notificationsPhone" name="notifications_phone_enabled" <?= $notificationsPhone ? 'checked' : '' ?>>
+                <label class="form-check-label" for="notificationsPhone">Enable phone notifications</label>
+            </div>
+            <small class="text-muted d-block mt-2">
+                Phone notifications require an SMS provider integration.
             </small>
         </div>
 

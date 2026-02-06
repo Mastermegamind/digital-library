@@ -80,6 +80,12 @@ if (preg_match('#^/secure/([A-Fa-f0-9]+)/?$#', $requestPath, $matches)) {
     exit;
 }
 
+if (preg_match('#^/download/([0-9]+)/?$#', $requestPath, $matches)) {
+    $_GET['id'] = (int)$matches[1];
+    require __DIR__ . '/download_resource.php';
+    exit;
+}
+
 // User dashboard and bookmarks
 if ($requestPath === '/dashboard') {
     require __DIR__ . '/dashboard.php';
@@ -88,6 +94,11 @@ if ($requestPath === '/dashboard') {
 
 if ($requestPath === '/bookmarks') {
     require __DIR__ . '/bookmarks.php';
+    exit;
+}
+
+if ($requestPath === '/notifications') {
+    require __DIR__ . '/notifications.php';
     exit;
 }
 
@@ -120,6 +131,16 @@ if ($requestPath === '/admin/dashboard') {
 
 if ($requestPath === '/admin/resources') {
     require __DIR__ . '/admin/resources.php';
+    exit;
+}
+
+if ($requestPath === '/admin/featured') {
+    require __DIR__ . '/admin/featured.php';
+    exit;
+}
+
+if ($requestPath === '/admin/reports') {
+    require __DIR__ . '/admin/reports.php';
     exit;
 }
 

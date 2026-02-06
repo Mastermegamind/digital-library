@@ -20,6 +20,8 @@ if (!$resource) {
 
 $catStmt = $pdo->query("SELECT * FROM categories ORDER BY name ASC");
 $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
+$resourceTags = get_resource_tags($id);
+$resourceTagsInput = implode(', ', $resourceTags);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf = $_POST['csrf_token'] ?? '';
@@ -35,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $description = trim($_POST['description'] ?? '');
     $category_id = $_POST['category_id'] !== '' ? (int)$_POST['category_id'] : null;
     $external_url = trim($_POST['external_url'] ?? '');
+    $tagsInput = trim($_POST['tags'] ?? '');
 
     if ($title === '' || $type === '') {
         flash_message('error', 'Title and type are required.');
@@ -96,6 +99,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ':external_url' => $external_url ?: null,
         ':id' => $id,
     ]);
+
+    $tags = parse_tag_list($tagsInput);
+    set_resource_tags($id, $tags);
+
+    if (($resource['status'] ?? 'approved') === 'approved') {
+        notify_all_users(
+            'resource_updated',
+            'Resource updated',
+            $title,
+            app_path('resource/' . $id),
+            current_user()['id'] ?? null
+        );
+
+        $resourceLink = app_url('resource/' . $id);
+        $emailSubject = 'Resource updated - ' . $APP_NAME;
+        $emailHtml = '<p>A resource has been updated.</p>'
+            . '<p><strong>' . h($title) . '</strong></p>'
+            . '<p><a href="' . h($resourceLink) . '">View resource</a></p>';
+        $emailText = "A resource has been updated.\n\n{$title}\n{$resourceLink}";
+        notify_all_users_email($emailSubject, $emailHtml, $emailText, current_user()['id'] ?? null);
+    }
 
     log_info('Resource updated', ['resource_id' => $id, 'title' => $title]);
     flash_message('success', 'Resource updated successfully!');
@@ -179,6 +203,14 @@ include __DIR__ . '/../includes/header.php';
                 <div class="col-md-12">
                     <label class="form-label"><i class="fas fa-align-left"></i> Description</label>
                     <textarea name="description" class="form-control" rows="4"><?= h($resource['description'] ?? '') ?></textarea>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label"><i class="fas fa-tags"></i> Tags</label>
+                    <input type="text" name="tags" class="form-control" value="<?= h($resourceTagsInput) ?>"
+                           placeholder="e.g., nursing, pediatrics, pharmacology">
+                    <div class="form-text">
+                        <i class="fas fa-info-circle"></i>Separate tags with commas.
+                    </div>
                 </div>
             </div>
         </div>

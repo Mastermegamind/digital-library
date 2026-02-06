@@ -36,27 +36,97 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
     const container = document.getElementById('viewer');
     const secureUrl = "<?php echo h($secureUrl); ?>";
 
-    const renderPage = async (pdf, pageNumber) => {
+    let pdfDocument = null;
+    let totalPages = 0;
+    let currentPage = 1;
+    let currentScale = 1.3; // Default scale (100% = 1.3)
+    const baseScale = 1.3;
+    let isRendering = false;
+    let pendingRender = null;
+
+    const renderPage = async (pdf, pageNumber, scale) => {
       try {
         const page = await pdf.getPage(pageNumber);
-        const viewport = page.getViewport({ scale: 1.3 });
+        const viewport = page.getViewport({ scale: scale });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
+        canvas.dataset.page = pageNumber;
         container.appendChild(canvas);
         await page.render({ canvasContext: context, viewport }).promise;
       } catch (err) {
         console.error('PDF render error', err);
-        container.innerHTML = '<p>Unable to render PDF page.</p>';
         throw err;
       }
     };
 
-    document.addEventListener('contextmenu', e => e.preventDefault());
+    const renderAllPages = async (scale) => {
+      if (isRendering) {
+        pendingRender = scale;
+        return;
+      }
 
-    let totalPages = 0;
-    let currentPage = 1;
+      isRendering = true;
+
+      // Save current scroll position relative to document
+      const scrollRatio = container.scrollHeight > 0
+        ? window.scrollY / container.scrollHeight
+        : 0;
+
+      // Clear existing canvases
+      container.innerHTML = '';
+
+      try {
+        for (let num = 1; num <= totalPages; num++) {
+          await renderPage(pdfDocument, num, scale);
+        }
+
+        // Restore scroll position
+        requestAnimationFrame(() => {
+          window.scrollTo(0, scrollRatio * container.scrollHeight);
+          setTimeout(trackProgress, 100);
+        });
+      } catch (err) {
+        console.error('PDF render error', err);
+        container.innerHTML = '<p>Unable to render PDF document.</p>';
+      }
+
+      isRendering = false;
+
+      // Check if there's a pending render
+      if (pendingRender !== null) {
+        const nextScale = pendingRender;
+        pendingRender = null;
+        renderAllPages(nextScale);
+      }
+    };
+
+    const setZoom = (zoomPercent) => {
+      currentScale = baseScale * (zoomPercent / 100);
+      renderAllPages(currentScale);
+    };
+
+    const fitToWidth = () => {
+      if (!pdfDocument) return;
+
+      pdfDocument.getPage(1).then(page => {
+        const viewport = page.getViewport({ scale: 1 });
+        const containerWidth = window.innerWidth - 40; // Account for padding
+        const newScale = containerWidth / viewport.width;
+        const zoomPercent = Math.round((newScale / baseScale) * 100);
+
+        currentScale = newScale;
+        renderAllPages(currentScale);
+
+        // Report new zoom level to parent
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'zoomUpdate', level: zoomPercent }, '*');
+        }
+      });
+    };
+
+    document.addEventListener('contextmenu', e => e.preventDefault());
 
     // Track scroll position to determine current page
     const trackProgress = () => {
@@ -101,9 +171,10 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
 
     pdfjsLib.getDocument({ url: secureUrl, withCredentials: true }).promise
       .then(async pdf => {
+        pdfDocument = pdf;
         totalPages = pdf.numPages;
         for (let num = 1; num <= pdf.numPages; num++) {
-          await renderPage(pdf, num);
+          await renderPage(pdf, num, currentScale);
         }
         // Initial progress report
         setTimeout(trackProgress, 500);
@@ -113,14 +184,22 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
         container.innerHTML = '<p>Unable to display PDF document.</p>';
       });
 
-    // Listen for scroll commands from parent frame
+    // Listen for commands from parent frame
     window.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'scroll') {
+      if (!e.data) return;
+
+      if (e.data.type === 'scroll') {
         const scrollAmount = 300;
         if (e.data.direction === 'up') {
           window.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
         } else if (e.data.direction === 'down') {
           window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+        }
+      } else if (e.data.type === 'zoom') {
+        if (e.data.fitWidth) {
+          fitToWidth();
+        } else if (e.data.level) {
+          setZoom(e.data.level);
         }
       }
     });

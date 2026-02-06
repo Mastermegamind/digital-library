@@ -28,6 +28,7 @@ header('Content-Description: File Transfer');
 header('Content-Type: application/octet-stream');
 header('Content-Disposition: attachment; filename="' . $basename . '"');
 header('Content-Length: ' . filesize($filePath));
+record_resource_download(current_user()['id'] ?? null, $id);
 readfile($filePath);
 log_info('Resource file downloaded', ['resource_id' => $id, 'path' => $resource['file_path']]);
 exit;

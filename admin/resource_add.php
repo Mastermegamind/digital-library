@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $description = trim($_POST['description'] ?? '');
     $category_id = $_POST['category_id'] !== '' ? (int)$_POST['category_id'] : null;
     $external_url = trim($_POST['external_url'] ?? '');
+    $tagsInput = trim($_POST['tags'] ?? '');
 
     if ($title === '' || $type === '') {
         log_warning('Resource add validation failed', ['title' => $title, 'type' => $type]);
@@ -72,8 +73,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ':approved_at' => date('Y-m-d H:i:s'),
     ]);
 
+    $resourceId = (int)$pdo->lastInsertId();
+    if ($tagsInput !== '') {
+        $tags = parse_tag_list($tagsInput);
+        set_resource_tags($resourceId, $tags);
+    }
+    notify_all_users(
+        'resource_new',
+        'New resource added',
+        $title,
+        app_path('resource/' . $resourceId),
+        current_user()['id'] ?? null
+    );
+
+    $resourceLink = app_url('resource/' . $resourceId);
+    $emailSubject = 'New resource added - ' . $APP_NAME;
+    $emailHtml = '<p>A new resource has been added.</p>'
+        . '<p><strong>' . h($title) . '</strong></p>'
+        . '<p><a href="' . h($resourceLink) . '">View resource</a></p>';
+    $emailText = "A new resource has been added.\n\n{$title}\n{$resourceLink}";
+    notify_all_users_email($emailSubject, $emailHtml, $emailText, current_user()['id'] ?? null);
+
     log_info('Resource created', [
-        'resource_id' => $pdo->lastInsertId(),
+        'resource_id' => $resourceId,
         'title' => $title,
         'type' => $type,
     ]);
@@ -188,6 +210,19 @@ include __DIR__ . '/../includes/header.php';
                     <div class="form-text">
                         <i class="fas fa-info-circle"></i>
                         Help users understand what this resource contains
+                    </div>
+                </div>
+
+                <div class="col-md-12">
+                    <label class="form-label">
+                        <i class="fas fa-tags"></i>
+                        Tags
+                    </label>
+                    <input type="text" name="tags" class="form-control"
+                           placeholder="e.g., nursing, pediatrics, pharmacology">
+                    <div class="form-text">
+                        <i class="fas fa-info-circle"></i>
+                        Separate tags with commas.
                     </div>
                 </div>
             </div>

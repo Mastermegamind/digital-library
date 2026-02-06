@@ -21,6 +21,14 @@ $sections = [
         'color' => 'success',
     ],
     [
+        'title' => 'Featured',
+        'text' => 'Curate homepage featured sections.',
+        'link' => app_path('admin/featured'),
+        'btn'  => 'Manage Featured',
+        'icon' => 'star',
+        'color' => 'pink',
+    ],
+    [
         'title' => 'Categories',
         'text' => 'Create or edit resource categories.',
         'link' => app_path('admin/categories'),
@@ -35,6 +43,14 @@ $sections = [
         'btn'  => 'Manage Users',
         'icon' => 'users',
         'color' => 'info',
+    ],
+    [
+        'title' => 'Reports',
+        'text' => 'Analytics on usage and searches.',
+        'link' => app_path('admin/reports'),
+        'btn'  => 'View Reports',
+        'icon' => 'chart-bar',
+        'color' => 'secondary',
     ],
     [
         'title' => 'Settings',

@@ -542,6 +542,8 @@ function issue_resource_token(int $resourceId, string $filePath, int $ttlSeconds
         'path' => $filePath,
         'mime' => $mimeHint,
         'expires' => time() + max(30, $ttlSeconds),
+        'created' => time(),
+        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
     ];
     return $token;
 }
@@ -669,6 +671,350 @@ function record_resource_view(int $userId, int $resourceId): void {
         $stmt = $pdo->prepare("INSERT INTO reading_progress (user_id, resource_id, last_position, progress_percent) VALUES (:user_id, :resource_id, 0, 0)");
         $stmt->execute([':user_id' => $userId, ':resource_id' => $resourceId]);
     }
+
+    // Record view analytics (best-effort)
+    try {
+        $sessionId = session_id() ?: null;
+        $stmt = $pdo->prepare("INSERT INTO resource_views (resource_id, user_id, session_id) VALUES (:resource_id, :user_id, :session_id)");
+        $stmt->execute([
+            ':resource_id' => $resourceId,
+            ':user_id' => $userId,
+            ':session_id' => $sessionId,
+        ]);
+    } catch (Throwable $e) {
+        log_debug('Resource view analytics insert failed', ['resource_id' => $resourceId, 'error' => $e->getMessage()]);
+    }
+}
+
+function record_resource_download(?int $userId, int $resourceId): void {
+    global $pdo;
+    try {
+        $sessionId = session_id() ?: null;
+        $stmt = $pdo->prepare("INSERT INTO resource_downloads (resource_id, user_id, session_id) VALUES (:resource_id, :user_id, :session_id)");
+        $stmt->execute([
+            ':resource_id' => $resourceId,
+            ':user_id' => $userId,
+            ':session_id' => $sessionId,
+        ]);
+    } catch (Throwable $e) {
+        log_debug('Resource download analytics insert failed', ['resource_id' => $resourceId, 'error' => $e->getMessage()]);
+    }
+}
+
+// =============================================
+// SEARCH + RECOMMENDATION HELPERS
+// =============================================
+
+function normalize_tag_name(string $tag): string {
+    $tag = trim($tag);
+    $tag = preg_replace('/\s+/', ' ', $tag);
+    return $tag ?? '';
+}
+
+function tag_slug(string $tag): string {
+    $tag = strtolower(trim($tag));
+    $tag = preg_replace('/[^a-z0-9\s-]/', '', $tag);
+    $tag = preg_replace('/\s+/', '-', $tag);
+    $tag = preg_replace('/-+/', '-', $tag);
+    return trim($tag, '-');
+}
+
+function parse_tag_list(string $tagList): array {
+    $raw = array_map('trim', explode(',', $tagList));
+    $tags = [];
+    foreach ($raw as $tag) {
+        $tag = normalize_tag_name($tag);
+        if ($tag === '') {
+            continue;
+        }
+        $tags[] = $tag;
+    }
+    return array_values(array_unique($tags));
+}
+
+function get_tag_ids(array $tags): array {
+    global $pdo, $DB_DRIVER;
+    $tagIds = [];
+    foreach ($tags as $tag) {
+        $name = normalize_tag_name($tag);
+        $slug = tag_slug($name);
+        if ($name === '' || $slug === '') {
+            continue;
+        }
+        $stmt = $pdo->prepare("SELECT id FROM tags WHERE slug = :slug LIMIT 1");
+        $stmt->execute([':slug' => $slug]);
+        $existing = $stmt->fetchColumn();
+        if ($existing) {
+            $tagIds[] = (int)$existing;
+            continue;
+        }
+
+        if ($DB_DRIVER === 'mysql') {
+            $insert = $pdo->prepare("INSERT IGNORE INTO tags (name, slug) VALUES (:name, :slug)");
+            $insert->execute([':name' => $name, ':slug' => $slug]);
+        } else {
+            $insert = $pdo->prepare("INSERT OR IGNORE INTO tags (name, slug) VALUES (:name, :slug)");
+            $insert->execute([':name' => $name, ':slug' => $slug]);
+        }
+
+        $stmt = $pdo->prepare("SELECT id FROM tags WHERE slug = :slug LIMIT 1");
+        $stmt->execute([':slug' => $slug]);
+        $newId = $stmt->fetchColumn();
+        if ($newId) {
+            $tagIds[] = (int)$newId;
+        }
+    }
+    return array_values(array_unique($tagIds));
+}
+
+function set_resource_tags(int $resourceId, array $tags): void {
+    global $pdo, $DB_DRIVER;
+    $tagIds = get_tag_ids($tags);
+
+    $pdo->prepare("DELETE FROM resource_tags WHERE resource_id = :rid")->execute([':rid' => $resourceId]);
+    if (empty($tagIds)) {
+        return;
+    }
+
+    if ($DB_DRIVER === 'mysql') {
+        $stmt = $pdo->prepare("INSERT IGNORE INTO resource_tags (resource_id, tag_id) VALUES (:rid, :tid)");
+    } else {
+        $stmt = $pdo->prepare("INSERT OR IGNORE INTO resource_tags (resource_id, tag_id) VALUES (:rid, :tid)");
+    }
+    foreach ($tagIds as $tagId) {
+        $stmt->execute([':rid' => $resourceId, ':tid' => $tagId]);
+    }
+}
+
+function get_resource_tags(int $resourceId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT t.name
+                           FROM resource_tags rt
+                           JOIN tags t ON rt.tag_id = t.id
+                           WHERE rt.resource_id = :rid
+                           ORDER BY t.name ASC");
+    $stmt->execute([':rid' => $resourceId]);
+    return array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'name');
+}
+
+function get_tags_for_resources(array $resourceIds): array {
+    global $pdo;
+    $resourceIds = array_values(array_unique(array_filter(array_map('intval', $resourceIds))));
+    if (empty($resourceIds)) {
+        return [];
+    }
+    $placeholders = [];
+    $params = [];
+    foreach ($resourceIds as $i => $rid) {
+        $ph = ':id' . $i;
+        $placeholders[] = $ph;
+        $params[$ph] = $rid;
+    }
+    $sql = "SELECT rt.resource_id, t.name
+            FROM resource_tags rt
+            JOIN tags t ON rt.tag_id = t.id
+            WHERE rt.resource_id IN (" . implode(',', $placeholders) . ")
+            ORDER BY t.name ASC";
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $key => $value) {
+        $stmt->bindValue($key, $value, PDO::PARAM_INT);
+    }
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $map = [];
+    foreach ($rows as $row) {
+        $rid = (int)$row['resource_id'];
+        $map[$rid][] = $row['name'];
+    }
+    return $map;
+}
+
+function log_search_query(?int $userId, string $query, array $filters, int $resultsCount): void {
+    global $pdo;
+    $query = trim($query);
+    $filters = array_filter($filters, fn($v) => $v !== '' && $v !== null);
+    if ($query === '' && empty($filters)) {
+        return;
+    }
+    $filtersJson = !empty($filters) ? json_encode($filters, JSON_UNESCAPED_UNICODE) : null;
+    try {
+        $stmt = $pdo->prepare("INSERT INTO search_logs (user_id, query, filters, results_count) VALUES (:user_id, :query, :filters, :results)");
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':query' => $query !== '' ? $query : null,
+            ':filters' => $filtersJson,
+            ':results' => $resultsCount,
+        ]);
+    } catch (Throwable $e) {
+        log_debug('Search log insert failed', ['error' => $e->getMessage()]);
+    }
+}
+
+function get_trending_resources(int $limit = 8, int $days = 7): array {
+    global $pdo;
+    $limit = max(1, min(50, $limit));
+    $days = max(1, min(90, $days));
+    $since = date('Y-m-d H:i:s', time() - ($days * 86400));
+
+    $sql = "SELECT r.*, c.name AS category_name,
+                   COALESCE(v.view_count, 0) AS view_count,
+                   COALESCE(d.download_count, 0) AS download_count
+            FROM resources r
+            LEFT JOIN (
+                SELECT resource_id, COUNT(*) AS view_count
+                FROM resource_views
+                WHERE created_at >= :since_views
+                GROUP BY resource_id
+            ) v ON r.id = v.resource_id
+            LEFT JOIN (
+                SELECT resource_id, COUNT(*) AS download_count
+                FROM resource_downloads
+                WHERE created_at >= :since_downloads
+                GROUP BY resource_id
+            ) d ON r.id = d.resource_id
+            LEFT JOIN categories c ON r.category_id = c.id
+            WHERE r.status = 'approved'
+              AND (v.view_count IS NOT NULL OR d.download_count IS NOT NULL)
+            ORDER BY (COALESCE(v.view_count, 0) + (2 * COALESCE(d.download_count, 0))) DESC,
+                     r.created_at DESC
+            LIMIT :limit";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':since_views', $since);
+    $stmt->bindValue(':since_downloads', $since);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function get_similar_resources(int $resourceId, int $limit = 4): array {
+    global $pdo;
+    $limit = max(1, min(12, $limit));
+    $scores = [];
+
+    $infoStmt = $pdo->prepare("SELECT category_id, type FROM resources WHERE id = :id LIMIT 1");
+    $infoStmt->execute([':id' => $resourceId]);
+    $info = $infoStmt->fetch(PDO::FETCH_ASSOC) ?: ['category_id' => null, 'type' => null];
+
+    $addScore = function (int $rid, float $score) use (&$scores, $resourceId) {
+        if ($rid === $resourceId) {
+            return;
+        }
+        if (!isset($scores[$rid])) {
+            $scores[$rid] = 0.0;
+        }
+        $scores[$rid] += $score;
+    };
+
+    // Co-viewed resources (weight 2)
+    try {
+        $stmt = $pdo->prepare("SELECT rv2.resource_id AS rid, COUNT(*) AS cnt
+                               FROM resource_views rv1
+                               JOIN resource_views rv2 ON rv1.user_id = rv2.user_id AND rv2.resource_id <> :rid
+                               JOIN resources r ON r.id = rv2.resource_id
+                               WHERE rv1.resource_id = :rid
+                                 AND rv1.user_id IS NOT NULL
+                                 AND r.status = 'approved'
+                               GROUP BY rv2.resource_id
+                               ORDER BY cnt DESC
+                               LIMIT 50");
+        $stmt->execute([':rid' => $resourceId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $addScore((int)$row['rid'], (float)$row['cnt'] * 2.0);
+        }
+    } catch (Throwable $e) {
+        log_debug('Similar resources co-view query failed', ['resource_id' => $resourceId, 'error' => $e->getMessage()]);
+    }
+
+    // Co-downloaded resources (weight 3)
+    try {
+        $stmt = $pdo->prepare("SELECT rd2.resource_id AS rid, COUNT(*) AS cnt
+                               FROM resource_downloads rd1
+                               JOIN resource_downloads rd2 ON rd1.user_id = rd2.user_id AND rd2.resource_id <> :rid
+                               JOIN resources r ON r.id = rd2.resource_id
+                               WHERE rd1.resource_id = :rid
+                                 AND rd1.user_id IS NOT NULL
+                                 AND r.status = 'approved'
+                               GROUP BY rd2.resource_id
+                               ORDER BY cnt DESC
+                               LIMIT 50");
+        $stmt->execute([':rid' => $resourceId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $addScore((int)$row['rid'], (float)$row['cnt'] * 3.0);
+        }
+    } catch (Throwable $e) {
+        log_debug('Similar resources co-download query failed', ['resource_id' => $resourceId, 'error' => $e->getMessage()]);
+    }
+
+    // Tag overlap (weight 4)
+    try {
+        $stmt = $pdo->prepare("SELECT rt2.resource_id AS rid, COUNT(*) AS cnt
+                               FROM resource_tags rt1
+                               JOIN resource_tags rt2 ON rt1.tag_id = rt2.tag_id AND rt2.resource_id <> :rid
+                               JOIN resources r ON r.id = rt2.resource_id
+                               WHERE rt1.resource_id = :rid
+                                 AND r.status = 'approved'
+                               GROUP BY rt2.resource_id
+                               ORDER BY cnt DESC
+                               LIMIT 50");
+        $stmt->execute([':rid' => $resourceId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $addScore((int)$row['rid'], (float)$row['cnt'] * 4.0);
+        }
+    } catch (Throwable $e) {
+        log_debug('Similar resources tag overlap query failed', ['resource_id' => $resourceId, 'error' => $e->getMessage()]);
+    }
+
+    // Same category (weight 1.5)
+    if (!empty($info['category_id'])) {
+        $stmt = $pdo->prepare("SELECT id FROM resources WHERE status = 'approved' AND category_id = :cid AND id <> :rid");
+        $stmt->execute([':cid' => (int)$info['category_id'], ':rid' => $resourceId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $rid) {
+            $addScore((int)$rid, 1.5);
+        }
+    }
+
+    // Same type (weight 1)
+    if (!empty($info['type'])) {
+        $stmt = $pdo->prepare("SELECT id FROM resources WHERE status = 'approved' AND type = :type AND id <> :rid");
+        $stmt->execute([':type' => $info['type'], ':rid' => $resourceId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $rid) {
+            $addScore((int)$rid, 1.0);
+        }
+    }
+
+    if (empty($scores)) {
+        return [];
+    }
+
+    arsort($scores);
+    $candidateIds = array_slice(array_keys($scores), 0, $limit);
+
+    $placeholders = [];
+    $params = [];
+    foreach ($candidateIds as $i => $rid) {
+        $ph = ':id' . $i;
+        $placeholders[] = $ph;
+        $params[$ph] = $rid;
+    }
+
+    $sql = "SELECT r.*, c.name AS category_name
+            FROM resources r
+            LEFT JOIN categories c ON r.category_id = c.id
+            WHERE r.id IN (" . implode(',', $placeholders) . ")";
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $key => $value) {
+        $stmt->bindValue($key, $value, PDO::PARAM_INT);
+    }
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $order = array_flip($candidateIds);
+    usort($rows, function ($a, $b) use ($order) {
+        return ($order[$a['id']] ?? 0) <=> ($order[$b['id']] ?? 0);
+    });
+
+    return array_slice($rows, 0, $limit);
 }
 
 // =============================================
@@ -742,6 +1088,21 @@ function is_email_verification_required(): bool {
     return filter_var($value, FILTER_VALIDATE_BOOLEAN);
 }
 
+function is_inapp_notifications_enabled(): bool {
+    $value = get_app_setting('notifications_inapp_enabled', '1');
+    return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+}
+
+function is_email_notifications_enabled(): bool {
+    $value = get_app_setting('notifications_email_enabled', '0');
+    return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+}
+
+function is_phone_notifications_enabled(): bool {
+    $value = get_app_setting('notifications_phone_enabled', '0');
+    return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+}
+
 function issue_email_verification_token(int $userId, int $ttlSeconds = 86400): string {
     global $pdo;
     $token = bin2hex(random_bytes(20));
@@ -781,6 +1142,172 @@ function verify_email_token(string $token): ?array {
     $userStmt = $pdo->prepare("SELECT * FROM users WHERE id = :id LIMIT 1");
     $userStmt->execute([':id' => $row['user_id']]);
     return $userStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+// =============================================
+// NOTIFICATIONS
+// =============================================
+
+function create_notification(int $userId, string $type, string $title, string $body = '', ?string $link = null): void {
+    global $pdo;
+    if (!is_inapp_notifications_enabled()) {
+        return;
+    }
+    $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, title, body, link)
+                           VALUES (:user_id, :type, :title, :body, :link)");
+    $stmt->execute([
+        ':user_id' => $userId,
+        ':type' => $type,
+        ':title' => $title,
+        ':body' => $body !== '' ? $body : null,
+        ':link' => $link,
+    ]);
+}
+
+function notify_all_users(string $type, string $title, string $body = '', ?string $link = null, ?int $excludeUserId = null): int {
+    global $pdo;
+    if (!is_inapp_notifications_enabled()) {
+        return 0;
+    }
+    $sql = "SELECT id FROM users WHERE status = 'active'";
+    $params = [];
+    if ($excludeUserId !== null) {
+        $sql .= " AND id <> :exclude";
+        $params[':exclude'] = $excludeUserId;
+    }
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $userIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    if (empty($userIds)) {
+        return 0;
+    }
+    $insert = $pdo->prepare("INSERT INTO notifications (user_id, type, title, body, link)
+                             VALUES (:user_id, :type, :title, :body, :link)");
+    $count = 0;
+    foreach ($userIds as $uid) {
+        $insert->execute([
+            ':user_id' => (int)$uid,
+            ':type' => $type,
+            ':title' => $title,
+            ':body' => $body !== '' ? $body : null,
+            ':link' => $link,
+        ]);
+        $count++;
+    }
+    return $count;
+}
+
+function notify_all_users_email(string $subject, string $htmlBody, ?string $textBody = null, ?int $excludeUserId = null): int {
+    global $pdo;
+    if (!mailer_is_configured() || !is_email_notifications_enabled()) {
+        return 0;
+    }
+    $sql = "SELECT id, email, name FROM users WHERE status = 'active' AND email IS NOT NULL AND email <> ''";
+    $params = [];
+    if ($excludeUserId !== null) {
+        $sql .= " AND id <> :exclude";
+        $params[':exclude'] = $excludeUserId;
+    }
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (empty($users)) {
+        return 0;
+    }
+    $sent = 0;
+    foreach ($users as $user) {
+        if (send_app_mail($user['email'], $subject, $htmlBody, $textBody)) {
+            $sent++;
+        }
+    }
+    return $sent;
+}
+
+function get_unread_notification_count(int $userId): int {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND read_at IS NULL");
+    $stmt->execute([':user_id' => $userId]);
+    return (int)$stmt->fetchColumn();
+}
+
+function get_user_notifications(int $userId, int $limit = 10, bool $onlyUnread = false): array {
+    global $pdo;
+    $sql = "SELECT * FROM notifications WHERE user_id = :user_id";
+    if ($onlyUnread) {
+        $sql .= " AND read_at IS NULL";
+    }
+    $sql .= " ORDER BY created_at DESC LIMIT :limit";
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', max(1, $limit), PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function get_user_notifications_paginated(int $userId, int $page, int $perPage, string $statusFilter = 'all', ?string $typeFilter = null): array {
+    global $pdo;
+    $page = max(1, $page);
+    $perPage = max(1, min(100, $perPage));
+    $offset = ($page - 1) * $perPage;
+
+    $where = ["user_id = :user_id"];
+    $params = [':user_id' => $userId];
+
+    if ($statusFilter === 'unread') {
+        $where[] = "read_at IS NULL";
+    } elseif ($statusFilter === 'read') {
+        $where[] = "read_at IS NOT NULL";
+    }
+
+    if ($typeFilter !== null && $typeFilter !== '') {
+        $where[] = "type = :type";
+        $params[':type'] = $typeFilter;
+    }
+
+    $whereSql = 'WHERE ' . implode(' AND ', $where);
+
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM notifications $whereSql");
+    $countStmt->execute($params);
+    $total = (int)$countStmt->fetchColumn();
+
+    $sql = "SELECT * FROM notifications $whereSql ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $key => $value) {
+        $stmt->bindValue($key, $value);
+    }
+    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return [
+        'total' => $total,
+        'page' => $page,
+        'per_page' => $perPage,
+        'items' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+    ];
+}
+
+function mark_notification_read(int $userId, int $notificationId): void {
+    global $pdo;
+    $stmt = $pdo->prepare("UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :user_id");
+    $stmt->execute([':id' => $notificationId, ':user_id' => $userId]);
+}
+
+function mark_all_notifications_read(int $userId): void {
+    global $pdo;
+    $stmt = $pdo->prepare("UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE user_id = :user_id AND read_at IS NULL");
+    $stmt->execute([':user_id' => $userId]);
+}
+
+function get_notification_types_for_user(int $userId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT type, COUNT(*) AS count
+                           FROM notifications
+                           WHERE user_id = :user_id
+                           GROUP BY type
+                           ORDER BY type ASC");
+    $stmt->execute([':user_id' => $userId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // =============================================

@@ -74,7 +74,40 @@ $closeUrl = app_path('');
     const appPath = '<?= h(app_base_path_prefix()) ?>/';
     const csrfToken = '<?= h(get_csrf_token()) ?>';
   </script>
-  <a class="close-button" href="<?php echo h($closeUrl); ?>">&larr; Close</a>
+  <!-- Viewer Toolbar -->
+  <div class="viewer-toolbar">
+    <a class="close-button" href="<?php echo h($closeUrl); ?>">&larr; Close</a>
+
+    <div class="toolbar-spacer"></div>
+
+    <!-- Zoom Controls -->
+    <div class="zoom-controls" id="zoom-controls">
+      <button type="button" id="zoom-out" class="toolbar-btn" title="Zoom Out (-)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <line x1="8" y1="11" x2="14" y2="11"/>
+        </svg>
+      </button>
+      <span id="zoom-level" class="zoom-level">100%</span>
+      <button type="button" id="zoom-in" class="toolbar-btn" title="Zoom In (+)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <line x1="11" y1="8" x2="11" y2="14"/>
+          <line x1="8" y1="11" x2="14" y2="11"/>
+        </svg>
+      </button>
+      <button type="button" id="zoom-reset" class="toolbar-btn" title="Reset Zoom">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+      </button>
+      <button type="button" id="zoom-fit" class="toolbar-btn" title="Fit to Width">Fit</button>
+    </div>
+  </div>
+
   <div class="viewer-wrapper">
     <div class="viewer-content">
       <?php if ($type === 'pdf' && $secureToken): ?>
@@ -536,6 +569,102 @@ $closeUrl = app_path('');
       hint.innerHTML = ' <small style="opacity:0.7;font-size:0.75rem;">(Esc to close, arrows to navigate)</small>';
       closeBtn.appendChild(hint);
     }
+
+    // =============================================
+    // ZOOM CONTROLS
+    // =============================================
+    (function() {
+      const zoomInBtn = document.getElementById('zoom-in');
+      const zoomOutBtn = document.getElementById('zoom-out');
+      const zoomResetBtn = document.getElementById('zoom-reset');
+      const zoomFitBtn = document.getElementById('zoom-fit');
+      const zoomLevelDisplay = document.getElementById('zoom-level');
+      const iframe = document.querySelector('.viewer-content iframe');
+
+      let currentZoom = 100;
+      const minZoom = 25;
+      const maxZoom = 300;
+      const zoomStep = 25;
+
+      function updateZoomDisplay() {
+        if (zoomLevelDisplay) {
+          zoomLevelDisplay.textContent = currentZoom + '%';
+        }
+      }
+
+      function sendZoomToIframe(zoom, fitWidth = false) {
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            type: 'zoom',
+            level: zoom,
+            fitWidth: fitWidth
+          }, '*');
+        }
+      }
+
+      function zoomIn() {
+        currentZoom = Math.min(currentZoom + zoomStep, maxZoom);
+        updateZoomDisplay();
+        sendZoomToIframe(currentZoom);
+      }
+
+      function zoomOut() {
+        currentZoom = Math.max(currentZoom - zoomStep, minZoom);
+        updateZoomDisplay();
+        sendZoomToIframe(currentZoom);
+      }
+
+      function zoomReset() {
+        currentZoom = 100;
+        updateZoomDisplay();
+        sendZoomToIframe(currentZoom);
+      }
+
+      function zoomFit() {
+        sendZoomToIframe(currentZoom, true);
+      }
+
+      if (zoomInBtn) zoomInBtn.addEventListener('click', zoomIn);
+      if (zoomOutBtn) zoomOutBtn.addEventListener('click', zoomOut);
+      if (zoomResetBtn) zoomResetBtn.addEventListener('click', zoomReset);
+      if (zoomFitBtn) zoomFitBtn.addEventListener('click', zoomFit);
+
+      // Keyboard shortcuts for zoom
+      document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+        if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+          e.preventDefault();
+          zoomIn();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+          e.preventDefault();
+          zoomOut();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+          e.preventDefault();
+          zoomReset();
+        }
+      });
+
+      // Mouse wheel zoom with Ctrl
+      document.querySelector('.viewer-content')?.addEventListener('wheel', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          if (e.deltaY < 0) {
+            zoomIn();
+          } else {
+            zoomOut();
+          }
+        }
+      }, { passive: false });
+
+      // Listen for zoom level updates from iframe
+      window.addEventListener('message', function(e) {
+        if (e.data && e.data.type === 'zoomUpdate') {
+          currentZoom = e.data.level;
+          updateZoomDisplay();
+        }
+      });
+    })();
   </script>
 </body>
 </html>

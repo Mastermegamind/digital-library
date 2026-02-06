@@ -23,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $description = trim($_POST['description'] ?? '');
     $category_id = $_POST['category_id'] !== '' ? (int)$_POST['category_id'] : null;
     $external_url = trim($_POST['external_url'] ?? '');
+    $tagsInput = trim($_POST['tags'] ?? '');
 
     if ($title === '' || $type === '') {
         flash_message('error', 'Title and type are required.');
@@ -97,14 +98,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ':approved_at' => $status === 'approved' ? date('Y-m-d H:i:s') : null,
     ]);
 
+    $resourceId = (int)$pdo->lastInsertId();
+    if ($tagsInput !== '') {
+        $tags = parse_tag_list($tagsInput);
+        set_resource_tags($resourceId, $tags);
+    }
+
     log_info('Resource submitted', [
-        'resource_id' => $pdo->lastInsertId(),
+        'resource_id' => $resourceId,
         'title' => $title,
         'status' => $status,
         'submitter_id' => $user['id'],
     ]);
 
-    if ($status === 'pending' && !empty($MAIL_ADMIN_ADDRESS) && mailer_is_configured()) {
+    if ($status === 'pending' && !empty($MAIL_ADMIN_ADDRESS) && mailer_is_configured() && is_email_notifications_enabled()) {
         $subject = 'New Resource Submission - ' . $APP_NAME;
         $body = '<p>A new resource has been submitted for review.</p>'
               . '<p><strong>Title:</strong> ' . h($title) . '</p>'
@@ -191,6 +198,14 @@ include __DIR__ . '/includes/header.php';
                         Description
                     </label>
                     <textarea name="description" class="form-control" rows="4" placeholder="Describe this resource"></textarea>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">
+                        <i class="fas fa-tags"></i>
+                        Tags
+                    </label>
+                    <input type="text" name="tags" class="form-control" placeholder="e.g., nursing, pediatrics, pharmacology">
+                    <div class="form-text"><i class="fas fa-info-circle"></i>Separate tags with commas.</div>
                 </div>
             </div>
         </div>

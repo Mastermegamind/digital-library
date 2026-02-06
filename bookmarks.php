@@ -36,6 +36,7 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get user's progress for display
 $userProgress = get_user_progress($user['id']);
+$tagsByResource = get_tags_for_resources(array_column($bookmarks, 'id'));
 
 $meta_title = 'My Bookmarks - ' . $APP_NAME;
 include __DIR__ . '/includes/header.php';
@@ -115,6 +116,18 @@ include __DIR__ . '/includes/header.php';
 
                         <?php if (!empty($r['description'])): ?>
                             <p class="resource-description"><?= h($r['description']) ?></p>
+                        <?php endif; ?>
+
+                        <?php $tags = $tagsByResource[$r['id']] ?? []; ?>
+                        <?php if (!empty($tags)): ?>
+                            <div class="d-flex flex-wrap gap-1 mb-2">
+                                <?php foreach (array_slice($tags, 0, 3) as $tag): ?>
+                                    <span class="badge bg-light text-muted">#<?= h($tag) ?></span>
+                                <?php endforeach; ?>
+                                <?php if (count($tags) > 3): ?>
+                                    <span class="badge bg-secondary">+<?= count($tags) - 3 ?></span>
+                                <?php endif; ?>
+                            </div>
                         <?php endif; ?>
 
                         <div class="resource-actions">

@@ -73,6 +73,13 @@ if (is_logged_in()) {
         $headerDarkMode = get_user_dark_mode($headerUser['id']);
     }
 }
+
+$notificationCount = 0;
+$notificationPreview = [];
+if (!empty($headerUser)) {
+    $notificationCount = get_unread_notification_count($headerUser['id']);
+    $notificationPreview = get_user_notifications($headerUser['id'], 5);
+}
 ?>
 <!doctype html>
 <html lang="en" data-theme="<?= $headerDarkMode ? 'dark' : 'light' ?>">
@@ -179,6 +186,49 @@ if (is_logged_in()) {
                     </button>
                 </li>
                 <?php if (is_logged_in()): $u = current_user(); ?>
+                    <li class="nav-item dropdown me-2">
+                        <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-bell"></i>
+                            <?php if ($notificationCount > 0): ?>
+                                <span class="badge bg-danger position-absolute top-0 start-100 translate-middle">
+                                    <?= $notificationCount > 99 ? '99+' : (int)$notificationCount ?>
+                                </span>
+                            <?php endif; ?>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-end p-0" style="min-width: 320px;">
+                            <div class="dropdown-header d-flex justify-content-between align-items-center">
+                                <span>Notifications</span>
+                                <a href="<?= h(app_path('notifications')) ?>" class="small text-decoration-none">View all</a>
+                            </div>
+                            <?php if (empty($notificationPreview)): ?>
+                                <div class="px-3 py-2 text-muted small">No notifications yet.</div>
+                            <?php else: ?>
+                                <div class="list-group list-group-flush">
+                                    <?php foreach ($notificationPreview as $note): ?>
+                                        <?php
+                                            $isUnread = empty($note['read_at']);
+                                            $noteLink = $note['link'] ?: app_path('notifications');
+                                            $markUrl = app_path('notifications') . '?read=' . (int)$note['id'] . '&next=' . urlencode($noteLink);
+                                        ?>
+                                        <a href="<?= h($markUrl) ?>" class="list-group-item list-group-item-action">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="<?= $isUnread ? 'fw-bold' : '' ?>">
+                                                    <?= h($note['title']) ?>
+                                                    <?php if (!empty($note['body'])): ?>
+                                                        <div class="small text-muted mt-1"><?= h($note['body']) ?></div>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <small class="text-muted"><?= date('M d', strtotime($note['created_at'])) ?></small>
+                                            </div>
+                                            <?php if ($isUnread): ?>
+                                                <span class="badge bg-primary mt-2">New</span>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
                             <?php $avatar = !empty($u['profile_image_path']) ? app_path($u['profile_image_path']) : null; ?>
