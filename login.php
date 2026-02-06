@@ -249,9 +249,9 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
                         <span class="input-icon"><i class="fas fa-key"></i></span>
                         <input type="password" name="password" class="form-control" required
                                placeholder="Enter your password">
-                        <div class="text-end mt-1">
-                            <a href="<?= h(app_path('forgot-password')) ?>" class="small text-decoration-none">Forgot password?</a>
-                        </div>
+                    </div>
+                    <div class="text-end mt-1">
+                        <a href="<?= h(app_path('forgot-password')) ?>" class="small text-decoration-none">Forgot password?</a>
                     </div>
 
                     <div class="hint-text">

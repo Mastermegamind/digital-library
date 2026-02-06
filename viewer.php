@@ -96,6 +96,7 @@ $closeUrl = app_path('');
     const savedPercent = <?= $savedProgress ? (float)$savedProgress['progress_percent'] : 0 ?>;
     const appPath = '<?= h(app_base_path_prefix()) ?>/';
     const csrfToken = '<?= h(get_csrf_token()) ?>';
+    const viewerType = '<?= h($type) ?>';
   </script>
   <!-- Viewer Toolbar -->
   <div class="viewer-toolbar">
@@ -490,65 +491,62 @@ $closeUrl = app_path('');
     // =============================================
     document.addEventListener('keydown', function(e) {
       // Don't capture if user is typing in an input
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const target = e.target;
+      if (!target) return;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
 
       const video = document.querySelector('video');
       const iframe = document.querySelector('.viewer-content iframe');
       const viewerContent = document.querySelector('.viewer-content');
+      const isVideoFocused = video && document.activeElement === video;
+
+      const scrollByAmount = (dx, dy) => {
+        if (viewerType === 'pdf' && iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({ type: 'scroll', dx: dx, dy: dy }, '*');
+        }
+        if (viewerContent) {
+          viewerContent.scrollBy({ left: dx, top: dy, behavior: 'smooth' });
+        } else {
+          window.scrollBy({ left: dx, top: dy, behavior: 'smooth' });
+        }
+      };
 
       switch(e.key) {
         case 'ArrowLeft':
+          if (viewerType === 'epub') return;
           e.preventDefault();
-          if (video) {
-            // Seek back 10 seconds for video
+          if (isVideoFocused) {
             video.currentTime = Math.max(0, video.currentTime - 10);
-          } else if (iframe) {
-            // Send scroll/page command to PDF iframe
-            iframe.contentWindow.postMessage({ type: 'scroll', direction: 'up' }, '*');
-            // Also try scrolling the iframe content
-            try {
-              if (iframe.contentWindow) {
-                iframe.contentWindow.scrollBy({ top: -300, behavior: 'smooth' });
-              }
-            } catch(err) {}
+          } else {
+            scrollByAmount(-200, 0);
           }
           break;
 
         case 'ArrowRight':
+          if (viewerType === 'epub') return;
           e.preventDefault();
-          if (video) {
-            // Seek forward 10 seconds for video
-            video.currentTime = Math.min(video.duration, video.currentTime + 10);
-          } else if (iframe) {
-            // Send scroll/page command to PDF iframe
-            iframe.contentWindow.postMessage({ type: 'scroll', direction: 'down' }, '*');
-            try {
-              if (iframe.contentWindow) {
-                iframe.contentWindow.scrollBy({ top: 300, behavior: 'smooth' });
-              }
-            } catch(err) {}
+          if (isVideoFocused) {
+            video.currentTime = Math.min(video.duration || 0, video.currentTime + 10);
+          } else {
+            scrollByAmount(200, 0);
           }
           break;
 
         case 'ArrowUp':
           e.preventDefault();
-          if (video) {
-            // Increase volume
+          if (isVideoFocused) {
             video.volume = Math.min(1, video.volume + 0.1);
-          } else if (viewerContent) {
-            // Scroll up in viewer
-            viewerContent.scrollBy({ top: -200, behavior: 'smooth' });
+          } else {
+            scrollByAmount(0, -200);
           }
           break;
 
         case 'ArrowDown':
           e.preventDefault();
-          if (video) {
-            // Decrease volume
+          if (isVideoFocused) {
             video.volume = Math.max(0, video.volume - 0.1);
-          } else if (viewerContent) {
-            // Scroll down in viewer
-            viewerContent.scrollBy({ top: 200, behavior: 'smooth' });
+          } else {
+            scrollByAmount(0, 200);
           }
           break;
 
@@ -617,7 +615,7 @@ $closeUrl = app_path('');
     if (closeBtn) {
       const hint = document.createElement('span');
       hint.className = 'keyboard-hint';
-      hint.innerHTML = ' <small style="opacity:0.7;font-size:0.75rem;">(Esc to close, arrows to navigate)</small>';
+      hint.innerHTML = ' <small style="opacity:0.7;font-size:0.75rem;">(Esc to close, arrows to scroll)</small>';
       closeBtn.appendChild(hint);
     }
 

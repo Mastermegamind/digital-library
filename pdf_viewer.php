@@ -148,10 +148,22 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
 
       if (e.data.type === 'scroll') {
         const scrollAmount = 300;
-        if (e.data.direction === 'up') {
-          window.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
+        let dx = 0;
+        let dy = 0;
+        if (typeof e.data.dx === 'number' || typeof e.data.dy === 'number') {
+          dx = Number(e.data.dx || 0);
+          dy = Number(e.data.dy || 0);
+        } else if (e.data.direction === 'up') {
+          dy = -scrollAmount;
         } else if (e.data.direction === 'down') {
-          window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+          dy = scrollAmount;
+        } else if (e.data.direction === 'left') {
+          dx = -scrollAmount;
+        } else if (e.data.direction === 'right') {
+          dx = scrollAmount;
+        }
+        if (dx !== 0 || dy !== 0) {
+          window.scrollBy({ left: dx, top: dy, behavior: 'smooth' });
         }
       } else if (e.data.type === 'restorePosition') {
         const page = parseInt(e.data.page, 10);
@@ -186,9 +198,17 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          window.scrollBy({ top: -pageAmount, behavior: 'smooth' });
+          window.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
           break;
         case 'ArrowRight':
+          e.preventDefault();
+          window.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+          break;
+        case 'PageUp':
+          e.preventDefault();
+          window.scrollBy({ top: -pageAmount, behavior: 'smooth' });
+          break;
+        case 'PageDown':
           e.preventDefault();
           window.scrollBy({ top: pageAmount, behavior: 'smooth' });
           break;
@@ -211,4 +231,3 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
   </script>
 </body>
 </html>
-

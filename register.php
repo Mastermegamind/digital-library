@@ -117,78 +117,148 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $csrf = get_csrf_token();
-$meta_title = 'Register - ' . $APP_NAME;
-$meta_description = 'Create a student account for ' . $APP_NAME . '.';
-include __DIR__ . '/includes/header.php';
-?>
+?><!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Register - <?= h($APP_NAME) ?></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Create a student account for <?= h($APP_NAME) ?>.">
+    <link rel="icon" type="image/png" href="<?= app_path('assets/images/favicon.png') ?>">
+    <link href="<?= app_path('assets/css/bootstrap.min.css') ?>" rel="stylesheet">
+    <link rel="stylesheet" href="<?= app_path('assets/css/all.min.css') ?>">
+    <link rel="stylesheet" href="<?= app_path('assets/css/inter.css') ?>">
+    <link rel="stylesheet" href="<?= app_path('assets/css/components.css') ?>">
+</head>
+<body class="login-page">
 
-<div class="page-header">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-        <div>
-            <h2 class="fw-bold mb-2 page-title">
-                <i class="fas fa-user-plus me-2"></i>Create Student Account
-            </h2>
-            <p class="text-muted mb-0">Register to access the library resources.</p>
+<div class="login-container" style="max-width:520px;">
+    <div class="login-card">
+        <!-- Header -->
+        <div class="login-header">
+            <div class="logo-circle">
+                <img src="<?= app_path('assets/images/main.png') ?>"
+                     alt="Logo"
+                     onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-book-reader fa-4x\'></i>';">
+            </div>
+            <h1 class="login-title"><?= h($APP_NAME) ?></h1>
+            <p class="login-subtitle">Create Student Account</p>
         </div>
-        <a href="<?= h(app_path('login')) ?>" class="btn btn-outline-secondary">
-            <i class="fas fa-sign-in-alt me-2"></i>Back to Login
-        </a>
+
+        <!-- Body -->
+        <div class="login-body">
+            <?php if (!empty($errors)): ?>
+                <div class="alert-danger">
+                    <strong><i class="fas fa-exclamation-triangle me-2"></i>Please fix the following:</strong>
+                    <ul class="mt-2 mb-0" style="padding-left:1.25rem;">
+                        <?php foreach ($errors as $e): ?><li><?= h($e) ?></li><?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+
+            <form method="post" novalidate>
+                <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+
+                <div>
+                    <label class="form-label">
+                        <i class="fas fa-user me-2"></i>Full Name
+                    </label>
+                    <div class="input-wrapper">
+                        <span class="input-icon"><i class="fas fa-user"></i></span>
+                        <input type="text" name="name" class="form-control" required autofocus
+                               placeholder="Enter your full name"
+                               value="<?= h($name) ?>">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        <i class="fas fa-envelope me-2"></i>Email
+                    </label>
+                    <div class="input-wrapper">
+                        <span class="input-icon"><i class="fas fa-envelope"></i></span>
+                        <input type="email" name="email" class="form-control" required
+                               placeholder="Enter your email address"
+                               value="<?= h($email) ?>">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        <i class="fas fa-id-card me-2"></i>Registration Number
+                    </label>
+                    <div class="input-wrapper">
+                        <span class="input-icon"><i class="fas fa-id-card"></i></span>
+                        <input type="text" name="reg_no" class="form-control" required
+                               placeholder="Enter your registration number"
+                               value="<?= h($regNo) ?>">
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:0.75rem;">
+                    <div style="flex:1;">
+                        <label class="form-label">
+                            <i class="fas fa-calendar me-2"></i>Enrollment Year
+                        </label>
+                        <input type="text" name="enrollment_year" class="form-control"
+                               required placeholder="2026"
+                               style="height:clamp(46px,6.5vh,58px);border:2px solid var(--border-color);border-radius:16px;font-size:clamp(0.95rem,1.75vh,1rem);background:rgba(255,255,255,0.7);"
+                               value="<?= h($enrollmentYear) ?>">
+                    </div>
+                    <div style="flex:1;">
+                        <label class="form-label">
+                            <i class="fas fa-building me-2"></i>Department
+                        </label>
+                        <input type="text" name="department" class="form-control"
+                               placeholder="Optional"
+                               style="height:clamp(46px,6.5vh,58px);border:2px solid var(--border-color);border-radius:16px;font-size:clamp(0.95rem,1.75vh,1rem);background:rgba(255,255,255,0.7);"
+                               value="<?= h($department) ?>">
+                    </div>
+                </div>
+
+                <div style="margin-top:clamp(0.75rem,1.8vh,1.5rem);">
+                    <label class="form-label">
+                        <i class="fas fa-lock me-2"></i>Password
+                    </label>
+                    <div class="input-wrapper">
+                        <span class="input-icon"><i class="fas fa-key"></i></span>
+                        <input type="password" name="password" class="form-control" required
+                               placeholder="At least 8 characters">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        <i class="fas fa-lock me-2"></i>Confirm Password
+                    </label>
+                    <div class="input-wrapper">
+                        <span class="input-icon"><i class="fas fa-check-double"></i></span>
+                        <input type="password" name="password_confirm" class="form-control" required
+                               placeholder="Repeat your password">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-login mt-3">
+                    <i class="fas fa-user-plus me-2"></i>Create Account
+                </button>
+            </form>
+
+            <div class="text-center mt-3">
+                <a href="<?= h(app_path('login')) ?>" class="text-decoration-none">
+                    <i class="fas fa-arrow-left me-1"></i>Already have an account? Sign In
+                </a>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="login-footer">
+            <p><i class="fas fa-shield-alt me-2"></i>
+                Secure Login &bull; &copy; <?= date('Y') ?> <?= h($APP_NAME) ?>
+            </p>
+        </div>
     </div>
 </div>
 
-<div class="form-card">
-    <?php if (!empty($errors)): ?>
-        <div class="alert-danger">
-            <strong>Please fix the following:</strong>
-            <ul class="mt-2 mb-0">
-                <?php foreach ($errors as $e): ?><li><?= h($e) ?></li><?php endforeach; ?>
-            </ul>
-        </div>
-    <?php endif; ?>
-
-    <form method="post">
-        <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
-
-        <div class="row g-4">
-            <div class="col-md-6">
-                <label class="form-label"><i class="fas fa-user me-2"></i>Full Name</label>
-                <input type="text" name="name" class="form-control" required value="<?= h($name) ?>">
-            </div>
-            <div class="col-md-6">
-                <label class="form-label"><i class="fas fa-envelope me-2"></i>Email</label>
-                <input type="email" name="email" class="form-control" required value="<?= h($email) ?>">
-            </div>
-            <div class="col-md-6">
-                <label class="form-label"><i class="fas fa-id-card me-2"></i>Registration Number</label>
-                <input type="text" name="reg_no" class="form-control" required value="<?= h($regNo) ?>">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label"><i class="fas fa-calendar me-2"></i>Enrollment Year</label>
-                <input type="text" name="enrollment_year" class="form-control" required placeholder="2026" value="<?= h($enrollmentYear) ?>">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label"><i class="fas fa-building me-2"></i>Department</label>
-                <input type="text" name="department" class="form-control" value="<?= h($department) ?>">
-            </div>
-            <div class="col-md-6">
-                <label class="form-label"><i class="fas fa-lock me-2"></i>Password</label>
-                <input type="password" name="password" class="form-control" required>
-            </div>
-            <div class="col-md-6">
-                <label class="form-label"><i class="fas fa-lock me-2"></i>Confirm Password</label>
-                <input type="password" name="password_confirm" class="form-control" required>
-            </div>
-        </div>
-
-        <div class="action-buttons mt-4">
-            <a href="<?= h(app_path('login')) ?>" class="btn btn-outline-secondary btn-lg">
-                <i class="fas fa-arrow-left me-2"></i>Back to Login
-            </a>
-            <button type="submit" class="btn btn-success btn-lg">
-                <i class="fas fa-user-plus me-2"></i>Create Account
-            </button>
-        </div>
-    </form>
-</div>
-
-<?php include __DIR__ . '/includes/footer.php'; ?>
+<script src="<?= app_path('assets/js/bootstrap.bundle.min.js') ?>"></script>
+</body>
+</html>

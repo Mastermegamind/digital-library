@@ -40,51 +40,99 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid) {
 }
 
 $csrf = get_csrf_token();
-global $APP_NAME;
-$appName = $APP_NAME ?? 'E-Library';
 ?><!doctype html>
-<html lang="en" data-bs-theme="light">
+<html lang="en">
 <head>
     <meta charset="utf-8">
+    <title>Reset Password - <?= h($APP_NAME) ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Reset Password — <?= h($appName) ?></title>
-    <link rel="stylesheet" href="<?= h(app_path('assets/bootstrap/css/bootstrap.min.css')) ?>">
-    <link rel="stylesheet" href="<?= h(app_path('assets/css/components.css')) ?>">
+    <link rel="icon" type="image/png" href="<?= app_path('assets/images/favicon.png') ?>">
+    <link href="<?= app_path('assets/css/bootstrap.min.css') ?>" rel="stylesheet">
+    <link rel="stylesheet" href="<?= app_path('assets/css/all.min.css') ?>">
+    <link rel="stylesheet" href="<?= app_path('assets/css/inter.css') ?>">
+    <link rel="stylesheet" href="<?= app_path('assets/css/components.css') ?>">
 </head>
-<body class="d-flex align-items-center justify-content-center min-vh-100" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)">
-    <div class="card shadow-lg border-0" style="max-width:440px;width:100%">
-        <div class="card-body p-4">
-            <h4 class="text-center mb-3">Reset Password</h4>
+<body class="login-page">
 
+<div class="login-container">
+    <div class="login-card">
+        <!-- Header -->
+        <div class="login-header">
+            <div class="logo-circle">
+                <img src="<?= app_path('assets/images/main.png') ?>"
+                     alt="Logo"
+                     onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-book-reader fa-4x\'></i>';">
+            </div>
+            <h1 class="login-title"><?= h($APP_NAME) ?></h1>
+            <p class="login-subtitle">Reset Password</p>
+        </div>
+
+        <!-- Body -->
+        <div class="login-body">
             <?php if (!$tokenValid): ?>
-                <div class="alert alert-danger">
+                <div class="alert-danger">
+                    <strong><i class="fas fa-exclamation-triangle me-2"></i>Link Expired</strong><br>
                     This password reset link is invalid or has expired.
                 </div>
-                <div class="text-center">
-                    <a href="<?= h(app_path('forgot-password')) ?>" class="btn btn-primary">Request New Link</a>
-                </div>
+                <a href="<?= h(app_path('forgot-password')) ?>" class="btn-login" style="display:block;text-align:center;text-decoration:none;">
+                    <i class="fas fa-redo me-2"></i>Request New Link
+                </a>
             <?php else: ?>
-                <?php foreach ($errors as $error): ?>
-                    <div class="alert alert-danger"><?= h($error) ?></div>
-                <?php endforeach; ?>
+                <?php if (!empty($errors)): ?>
+                    <div class="alert-danger">
+                        <strong><i class="fas fa-exclamation-triangle me-2"></i>Oops!</strong><br>
+                        <?= implode('<br>', array_map('h', $errors)) ?>
+                    </div>
+                <?php endif; ?>
 
-                <form method="post">
+                <form method="post" novalidate>
                     <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
                     <input type="hidden" name="token" value="<?= h($token) ?>">
-                    <div class="mb-3">
-                        <label for="password" class="form-label">New Password</label>
-                        <input type="password" name="password" id="password" class="form-control" required
-                               placeholder="At least 8 characters" minlength="8">
+
+                    <div>
+                        <label class="form-label">
+                            <i class="fas fa-lock me-2"></i>New Password
+                        </label>
+                        <div class="input-wrapper">
+                            <span class="input-icon"><i class="fas fa-key"></i></span>
+                            <input type="password" name="password" class="form-control" required autofocus
+                                   placeholder="At least 8 characters" minlength="8">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="password_confirm" class="form-label">Confirm Password</label>
-                        <input type="password" name="password_confirm" id="password_confirm" class="form-control" required
-                               placeholder="Repeat password">
+
+                    <div>
+                        <label class="form-label">
+                            <i class="fas fa-lock me-2"></i>Confirm Password
+                        </label>
+                        <div class="input-wrapper">
+                            <span class="input-icon"><i class="fas fa-check-double"></i></span>
+                            <input type="password" name="password_confirm" class="form-control" required
+                                   placeholder="Repeat your password">
+                        </div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Reset Password</button>
+
+                    <button type="submit" class="btn-login mt-3">
+                        <i class="fas fa-save me-2"></i>Reset Password
+                    </button>
                 </form>
             <?php endif; ?>
+
+            <div class="text-center mt-3">
+                <a href="<?= h(app_path('login')) ?>" class="text-decoration-none">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Login
+                </a>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="login-footer">
+            <p><i class="fas fa-shield-alt me-2"></i>
+                Secure Login &bull; &copy; <?= date('Y') ?> <?= h($APP_NAME) ?>
+            </p>
         </div>
     </div>
+</div>
+
+<script src="<?= app_path('assets/js/bootstrap.bundle.min.js') ?>"></script>
 </body>
 </html>
