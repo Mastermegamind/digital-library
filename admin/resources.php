@@ -12,6 +12,48 @@ if ($statusFilter !== '' && in_array($statusFilter, $validStatuses, true)) {
     $params[':status'] = $statusFilter;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'backfill_file_sizes') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
+        flash_message('error', 'Invalid session token.');
+        header('Location: ' . app_path('admin/resources'));
+        exit;
+    }
+
+    $rows = $pdo->query("SELECT id, type, file_path FROM resources WHERE file_size IS NULL")->fetchAll(PDO::FETCH_ASSOC);
+    $updated = 0;
+    $skipped = 0;
+    $missing = 0;
+    $updateStmt = $pdo->prepare("UPDATE resources SET file_size = :size WHERE id = :id");
+
+    foreach ($rows as $row) {
+        $type = strtolower(trim((string)($row['type'] ?? '')));
+        if (in_array($type, ['link', 'video_link'], true)) {
+            $skipped++;
+            continue;
+        }
+        if (empty($row['file_path'])) {
+            $skipped++;
+            continue;
+        }
+        $size = get_resource_file_size_bytes($row['file_path']);
+        if ($size === null) {
+            $missing++;
+            continue;
+        }
+        $updateStmt->execute([':size' => $size, ':id' => (int)$row['id']]);
+        $updated++;
+    }
+
+    $message = "Backfill complete: {$updated} updated, {$skipped} skipped, {$missing} missing files.";
+    flash_message('success', $message);
+    $returnUrl = app_path('admin/resources');
+    if ($statusFilter !== '') {
+        $returnUrl .= '?status=' . urlencode($statusFilter);
+    }
+    header('Location: ' . $returnUrl);
+    exit;
+}
+
 $stmt = $pdo->prepare("SELECT r.*, COALESCE(r.status, 'approved') AS status, c.name AS category_name, u.name AS submitter_name
                      FROM resources r
                      LEFT JOIN categories c ON r.category_id = c.id
@@ -56,6 +98,14 @@ include __DIR__ . '/../includes/header.php';
             <a href="<?= h(app_path('admin/featured')) ?>" class="btn btn-outline-warning">
                 <i class="fas fa-star me-2"></i>Featured
             </a>
+            <form method="post" class="d-inline">
+                <input type="hidden" name="csrf_token" value="<?= h(get_csrf_token()) ?>">
+                <input type="hidden" name="action" value="backfill_file_sizes">
+                <button type="submit" class="btn btn-outline-info"
+                        onclick="return confirm('Backfill file sizes for resources with missing size?');">
+                    <i class="fas fa-database me-2"></i>Backfill Sizes
+                </button>
+            </form>
             <a href="<?= h(app_path('admin/resource/add')) ?>" class="btn btn-success">
                 <i class="fas fa-plus-circle me-2"></i>Add Resource
             </a>
@@ -176,6 +226,11 @@ foreach ($resources as $r) {
                                 <div class="fw-bold">
                                     <?= h($r['title']) ?>
                                 </div>
+                                <?php if (can_view_resource_file_size()): ?>
+                                    <small class="text-muted d-block mt-1">
+                                        <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($r)) ?>
+                                    </small>
+                                <?php endif; ?>
                                 <?php if (!empty($r['description'])): ?>
                                     <small class="text-muted d-block mt-1 text-ellipsis-300">
                                         <?= h($r['description']) ?>

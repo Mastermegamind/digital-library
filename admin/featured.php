@@ -160,7 +160,7 @@ if (isset($_GET['delete'])) {
 $resourcesStmt = $pdo->query("SELECT id, title, type, status FROM resources ORDER BY created_at DESC");
 $resourceOptions = $resourcesStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$featuredStmt = $pdo->query("SELECT fr.*, r.title, r.type, r.status, c.name AS category_name
+$featuredStmt = $pdo->query("SELECT fr.*, r.title, r.type, r.status, r.file_path, r.file_size, c.name AS category_name
                              FROM featured_resources fr
                              JOIN resources r ON fr.resource_id = r.id
                              LEFT JOIN categories c ON r.category_id = c.id
@@ -326,6 +326,11 @@ include __DIR__ . '/../includes/header.php';
                                 <tr>
                                     <td>
                                         <div class="fw-bold"><?= h($item['title']) ?></div>
+                                        <?php if (can_view_resource_file_size()): ?>
+                                            <small class="text-muted d-block mt-1">
+                                                <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($item)) ?>
+                                            </small>
+                                        <?php endif; ?>
                                         <?php if (!empty($item['category_name'])): ?>
                                             <small class="text-muted">
                                                 <i class="fas fa-folder me-1"></i><?= h($item['category_name']) ?>

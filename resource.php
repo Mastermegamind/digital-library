@@ -159,6 +159,7 @@ if ($user && !empty($resourceQuizzes)) {
     }
 }
 $aiAvailable = function_exists('ai_is_configured') && ai_is_configured();
+$fileSizeLabel = can_view_resource_file_size() ? get_resource_file_size_label($resource) : null;
 
 include __DIR__ . '/includes/header.php';
 ?>
@@ -175,6 +176,11 @@ include __DIR__ . '/includes/header.php';
     <?php foreach ($resourceTags as $tag): ?>
       <span class="badge bg-light text-muted">#<?= h($tag) ?></span>
     <?php endforeach; ?>
+  </div>
+<?php endif; ?>
+<?php if ($fileSizeLabel): ?>
+  <div class="small text-muted mt-2">
+    <i class="fas fa-hdd me-1"></i>File size: <?= h($fileSizeLabel) ?>
   </div>
 <?php endif; ?>
 
@@ -218,11 +224,20 @@ include __DIR__ . '/includes/header.php';
   </div>
 <?php endif; ?>
 
-<?php if (!empty($resource['cover_image_path'])): ?>
-  <div class="my-3">
-    <img src="<?php echo h(app_path($resource['cover_image_path'])); ?>" alt="Cover image" class="img-fluid rounded shadow-sm border">
-  </div>
-<?php endif; ?>
+<?php
+  $coverData = get_resource_cover_data($resource);
+  $cover = $coverData['url'];
+  $creditText = $coverData['credit'] ?? null;
+  $creditLink = $coverData['credit_link'] ?? null;
+?>
+<div class="my-3 position-relative">
+  <img src="<?php echo h($cover); ?>" alt="Cover image" class="img-fluid rounded shadow-sm border">
+  <?php if ($creditText && $creditLink): ?>
+    <div class="image-credit">
+      <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>
+    </div>
+  <?php endif; ?>
+</div>
 
 <div class="viewer-container mt-3 rounded shadow-sm">
 <?php if ($type === 'pdf' && $fileUrl): ?>
@@ -336,9 +351,10 @@ include __DIR__ . '/includes/header.php';
     <div class="row g-4 mb-4">
       <?php foreach ($similarResources as $sim): ?>
         <?php
-          $simCover = !empty($sim['cover_image_path'])
-              ? app_path($sim['cover_image_path'])
-              : 'https://via.placeholder.com/400x280/667eea/ffffff?text=' . urlencode($sim['title']);
+          $simCoverData = get_resource_cover_data($sim);
+          $simCover = $simCoverData['url'];
+          $simCreditText = $simCoverData['credit'] ?? null;
+          $simCreditLink = $simCoverData['credit_link'] ?? null;
           $simBadgeColor = 'secondary';
           if (!empty($sim['type'])) {
             $simBadgeColor = str_contains($sim['type'], 'pdf') ? 'danger' : (str_contains($sim['type'], 'video') ? 'warning' : 'primary');
@@ -353,6 +369,11 @@ include __DIR__ . '/includes/header.php';
               <span class="resource-badge text-<?= h($simBadgeColor) ?>">
                 <i class="fas fa-book me-1"></i><?= strtoupper($sim['type'] ?? 'FILE') ?>
               </span>
+              <?php if ($simCreditText && $simCreditLink): ?>
+                <div class="image-credit">
+                  <a href="<?= h($simCreditLink) ?>" target="_blank" rel="noopener"><?= h($simCreditText) ?></a>
+                </div>
+              <?php endif; ?>
             </div>
             <div class="resource-body">
               <h5 class="resource-title"><?= h($sim['title']) ?></h5>
@@ -361,6 +382,11 @@ include __DIR__ . '/includes/header.php';
                   <i class="fas fa-folder"></i>
                   <?= h($sim['category_name']) ?>
                 </span>
+              <?php endif; ?>
+              <?php if (can_view_resource_file_size()): ?>
+                <div class="small text-muted mb-1">
+                  <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($sim)) ?>
+                </div>
               <?php endif; ?>
               <?php if (!empty($simDisplayTags)): ?>
                 <div class="d-flex flex-wrap gap-1 mb-2">

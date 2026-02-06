@@ -66,7 +66,7 @@ if ($isOwner && isset($_GET['search_resource'])) {
     $q = trim($_GET['search_resource']);
     if ($q !== '') {
         global $pdo;
-        $stmt = $pdo->prepare("SELECT id, title, type FROM resources WHERE COALESCE(status,'approved')='approved' AND (title LIKE :q OR description LIKE :q) LIMIT 10");
+        $stmt = $pdo->prepare("SELECT id, title, type, file_path FROM resources WHERE COALESCE(status,'approved')='approved' AND (title LIKE :q OR description LIKE :q) LIMIT 10");
         $stmt->execute([':q' => '%' . $q . '%']);
         $searchResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -110,9 +110,20 @@ require_once __DIR__ . '/includes/header.php';
             <?php foreach ($items as $resource): ?>
                 <div class="col-md-4 col-sm-6">
                     <div class="card h-100">
-                        <?php if (!empty($resource['cover_image_path'])): ?>
-                            <img src="<?= h(app_path($resource['cover_image_path'])) ?>" class="card-img-top" style="height:160px;object-fit:cover" alt="">
-                        <?php endif; ?>
+                        <?php
+                            $coverData = get_resource_cover_data($resource);
+                            $cover = $coverData['url'];
+                            $creditText = $coverData['credit'] ?? null;
+                            $creditLink = $coverData['credit_link'] ?? null;
+                        ?>
+                        <div class="position-relative">
+                            <img src="<?= h($cover) ?>" class="card-img-top" style="height:160px;object-fit:cover" alt="">
+                            <?php if ($creditText && $creditLink): ?>
+                                <div class="image-credit">
+                                    <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                         <div class="card-body">
                             <span class="badge bg-info mb-1"><?= h(strtoupper($resource['type'])) ?></span>
                             <h6 class="card-title">
@@ -120,6 +131,11 @@ require_once __DIR__ . '/includes/header.php';
                             </h6>
                             <?php if (!empty($resource['category_name'])): ?>
                                 <small class="text-muted"><?= h($resource['category_name']) ?></small>
+                            <?php endif; ?>
+                            <?php if (can_view_resource_file_size()): ?>
+                                <div class="small text-muted">
+                                    <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($resource)) ?>
+                                </div>
                             <?php endif; ?>
                         </div>
                         <div class="card-footer bg-transparent d-flex justify-content-between">
@@ -176,6 +192,11 @@ require_once __DIR__ . '/includes/header.php';
                                 <div>
                                     <strong><?= h($sr['title']) ?></strong>
                                     <span class="badge bg-secondary ms-1"><?= h(strtoupper($sr['type'])) ?></span>
+                                    <?php if (can_view_resource_file_size()): ?>
+                                        <div class="small text-muted mt-1">
+                                            <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($sr)) ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                                 <form method="post">
                                     <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">

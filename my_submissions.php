@@ -58,7 +58,14 @@ include __DIR__ . '/includes/header.php';
                 <tbody>
                     <?php foreach ($resources as $r): ?>
                         <tr>
-                            <td><?= h($r['title']) ?></td>
+                            <td>
+                                <?= h($r['title']) ?>
+                                <?php if (can_view_resource_file_size()): ?>
+                                    <div class="small text-muted">
+                                        <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($r)) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                             <td><?= h($r['category_name'] ?? '-') ?></td>
                             <td>
                                 <?php $status = $r['status'] ?? 'approved'; ?>

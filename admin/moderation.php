@@ -191,7 +191,14 @@ include __DIR__ . '/../includes/header.php';
                 <tbody>
                     <?php foreach ($pendingResources as $res): ?>
                         <tr>
-                            <td><?= h($res['title']) ?></td>
+                            <td>
+                                <?= h($res['title']) ?>
+                                <?php if (can_view_resource_file_size()): ?>
+                                    <div class="small text-muted">
+                                        <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($res)) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                             <td><?= h($res['category_name'] ?? '-') ?></td>
                             <td><?= h($res['submitter_name'] ?? 'Unknown') ?></td>
                             <td>

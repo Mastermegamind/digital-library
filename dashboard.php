@@ -125,7 +125,13 @@ include __DIR__ . '/includes/header.php';
     <h3><i class="fas fa-book-reader me-2"></i>Continue Reading</h3>
     <div class="row g-3">
         <?php foreach ($inProgressResources as $r): ?>
-            <?php $cover = !empty($r['cover_image_path']) ? app_path($r['cover_image_path']) : 'https://via.placeholder.com/60x60/667eea/ffffff?text=' . urlencode(substr($r['title'], 0, 1)); ?>
+            <?php
+                $coverData = get_resource_cover_data($r, [
+                    'allow_fetch' => false,
+                    'placeholder' => 'https://via.placeholder.com/60x60/667eea/ffffff?text=' . urlencode(substr($r['title'], 0, 1)),
+                ]);
+                $cover = $coverData['url'];
+            ?>
             <div class="col-md-6">
                 <a href="<?= h(app_path('viewer/' . $r['id'])) ?>" class="continue-reading-card">
                     <img src="<?= h($cover) ?>" alt="<?= h($r['title']) ?>" class="resource-thumb" loading="lazy">
@@ -135,6 +141,11 @@ include __DIR__ . '/includes/header.php';
                             <i class="fas fa-chart-pie me-1"></i>
                             <?= round($r['progress_percent']) ?>% complete
                         </div>
+                        <?php if (can_view_resource_file_size()): ?>
+                            <div class="small text-muted">
+                                <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($r)) ?>
+                            </div>
+                        <?php endif; ?>
                         <?php $tags = $tagsByResource[$r['id']] ?? []; ?>
                         <?php if (!empty($tags)): ?>
                             <div class="d-flex flex-wrap gap-1 mt-1">
@@ -176,7 +187,10 @@ include __DIR__ . '/includes/header.php';
         <div class="row g-4">
             <?php foreach ($recentResources as $r): ?>
                 <?php
-                    $cover = !empty($r['cover_image_path']) ? app_path($r['cover_image_path']) : 'https://via.placeholder.com/400x280/667eea/ffffff?text=' . urlencode($r['title']);
+                    $coverData = get_resource_cover_data($r);
+                    $cover = $coverData['url'];
+                    $creditText = $coverData['credit'] ?? null;
+                    $creditLink = $coverData['credit_link'] ?? null;
                     $typeColors = ['pdf' => 'danger', 'document' => 'primary', 'video' => 'warning', 'link' => 'info', 'image' => 'success'];
                     $badgeColor = $typeColors[$r['type']] ?? 'secondary';
                     $isBookmarked = in_array($r['id'], $userBookmarks);
@@ -190,6 +204,11 @@ include __DIR__ . '/includes/header.php';
                                 <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : 'file-alt') ?> me-1"></i>
                                 <?= strtoupper($r['type']) ?>
                             </span>
+                            <?php if ($creditText && $creditLink): ?>
+                                <div class="image-credit">
+                                    <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>
+                                </div>
+                            <?php endif; ?>
                             <?php if ($progressPercent > 0): ?>
                                 <div class="progress-indicator">
                                     <div class="progress-indicator-bar" style="width: <?= min(100, $progressPercent) ?>%"></div>
@@ -207,6 +226,11 @@ include __DIR__ . '/includes/header.php';
                                     <i class="fas fa-folder"></i>
                                     <?= h($r['category_name']) ?>
                                 </span>
+                            <?php endif; ?>
+                            <?php if (can_view_resource_file_size()): ?>
+                                <div class="small text-muted mb-1">
+                                    <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($r)) ?>
+                                </div>
                             <?php endif; ?>
                             <?php $tags = $tagsByResource[$r['id']] ?? []; ?>
                             <?php if (!empty($tags)): ?>
@@ -267,7 +291,10 @@ include __DIR__ . '/includes/header.php';
         <div class="row g-4">
             <?php foreach ($bookmarkedResources as $r): ?>
                 <?php
-                    $cover = !empty($r['cover_image_path']) ? app_path($r['cover_image_path']) : 'https://via.placeholder.com/400x280/667eea/ffffff?text=' . urlencode($r['title']);
+                    $coverData = get_resource_cover_data($r);
+                    $cover = $coverData['url'];
+                    $creditText = $coverData['credit'] ?? null;
+                    $creditLink = $coverData['credit_link'] ?? null;
                     $typeColors = ['pdf' => 'danger', 'document' => 'primary', 'video' => 'warning', 'link' => 'info', 'image' => 'success'];
                     $badgeColor = $typeColors[$r['type']] ?? 'secondary';
                 ?>
@@ -279,6 +306,11 @@ include __DIR__ . '/includes/header.php';
                                 <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : 'file-alt') ?> me-1"></i>
                                 <?= strtoupper($r['type']) ?>
                             </span>
+                            <?php if ($creditText && $creditLink): ?>
+                                <div class="image-credit">
+                                    <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         <div class="resource-body">
                             <h5 class="resource-title"><?= h($r['title']) ?></h5>
@@ -287,6 +319,11 @@ include __DIR__ . '/includes/header.php';
                                     <i class="fas fa-folder"></i>
                                     <?= h($r['category_name']) ?>
                                 </span>
+                            <?php endif; ?>
+                            <?php if (can_view_resource_file_size()): ?>
+                                <div class="small text-muted mb-1">
+                                    <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($r)) ?>
+                                </div>
                             <?php endif; ?>
                             <?php $tags = $tagsByResource[$r['id']] ?? []; ?>
                             <?php if (!empty($tags)): ?>

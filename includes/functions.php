@@ -532,6 +532,318 @@ function delete_uploaded_file(?string $relativePath): void {
     }
 }
 
+function can_view_resource_file_size(): bool {
+    if (function_exists('is_admin_or_staff')) {
+        return is_admin_or_staff();
+    }
+    if (!function_exists('current_user')) {
+        return false;
+    }
+    $u = current_user();
+    return $u && in_array($u['role'] ?? '', ['admin', 'staff'], true);
+}
+
+function resource_file_real_path(?string $relativePath): ?string {
+    if (empty($relativePath)) {
+        return null;
+    }
+    $cleanPath = ltrim(str_replace('\\', '/', $relativePath), '/');
+    if ($cleanPath === '' || str_contains($cleanPath, '..')) {
+        return null;
+    }
+    $fullPath = dirname(__DIR__) . '/' . $cleanPath;
+    return is_file($fullPath) ? $fullPath : null;
+}
+
+function get_resource_file_size_bytes(?string $relativePath): ?int {
+    static $cache = [];
+    $key = (string)($relativePath ?? '');
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $fullPath = resource_file_real_path($relativePath);
+    if (!$fullPath) {
+        $cache[$key] = null;
+        return null;
+    }
+    $size = @filesize($fullPath);
+    $cache[$key] = ($size === false) ? null : (int)$size;
+    return $cache[$key];
+}
+
+function format_file_size(?int $bytes): string {
+    if ($bytes === null) {
+        return 'Unavailable';
+    }
+    $bytes = max(0, $bytes);
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $size = (float)$bytes;
+    $unitIndex = 0;
+    while ($size >= 1024 && $unitIndex < count($units) - 1) {
+        $size /= 1024;
+        $unitIndex++;
+    }
+    $precision = $size >= 100 ? 0 : ($size >= 10 ? 1 : 2);
+    return number_format($size, $precision) . ' ' . $units[$unitIndex];
+}
+
+function get_resource_file_size_label(array $resource): string {
+    $type = strtolower(trim((string)($resource['type'] ?? '')));
+    if (in_array($type, ['link', 'video_link'], true)) {
+        return 'External';
+    }
+    $bytes = null;
+    if (array_key_exists('file_size', $resource) && $resource['file_size'] !== null && $resource['file_size'] !== '') {
+        $bytes = (int)$resource['file_size'];
+    }
+    if ($bytes === null) {
+        $bytes = get_resource_file_size_bytes($resource['file_path'] ?? null);
+    }
+    return format_file_size($bytes);
+}
+
+function resolve_image_provider(): ?string {
+    global $IMAGE_PROVIDER, $PEXELS_API_KEY, $PIXABAY_API_KEY, $UNSPLASH_ACCESS_KEY;
+    $preferred = strtolower(trim((string)($IMAGE_PROVIDER ?? '')));
+    $providers = array_values(array_unique(array_filter([$preferred, 'pexels', 'pixabay', 'unsplash'])));
+    foreach ($providers as $provider) {
+        if ($provider === 'pexels' && !empty($PEXELS_API_KEY)) {
+            return 'pexels';
+        }
+        if ($provider === 'pixabay' && !empty($PIXABAY_API_KEY)) {
+            return 'pixabay';
+        }
+        if ($provider === 'unsplash' && !empty($UNSPLASH_ACCESS_KEY)) {
+            return 'unsplash';
+        }
+    }
+    return null;
+}
+
+function image_provider_is_configured(): bool {
+    return resolve_image_provider() !== null;
+}
+
+function build_fallback_image_query(array $resource): string {
+    global $IMAGE_FALLBACK_QUERY;
+    $base = trim((string)($IMAGE_FALLBACK_QUERY ?? ''));
+    if ($base === '') {
+        $base = 'medical education';
+    }
+    $parts = [$base];
+    if (!empty($resource['category_name'])) {
+        $parts[] = (string)$resource['category_name'];
+    }
+    $title = trim((string)($resource['title'] ?? ''));
+    if ($title !== '') {
+        $cleanTitle = preg_replace('/[^\w\s-]+/u', ' ', $title);
+        $words = preg_split('/\s+/', trim((string)$cleanTitle));
+        if (!empty($words)) {
+            $parts[] = implode(' ', array_slice($words, 0, 5));
+        }
+    }
+    return trim(implode(' ', array_filter($parts)));
+}
+
+function http_get_json(string $url, array $headers = [], int $timeoutSeconds = 6): ?array {
+    if (!function_exists('curl_init')) {
+        return null;
+    }
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => max(1, $timeoutSeconds),
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_HTTPHEADER => $headers,
+    ]);
+    $response = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    if ($response === false || $status < 200 || $status >= 300) {
+        log_warning('Image provider request failed', ['status' => $status, 'error' => $error, 'url' => $url]);
+        return null;
+    }
+    $data = json_decode($response, true);
+    return is_array($data) ? $data : null;
+}
+
+function fetch_medical_image_from_provider(string $query): ?array {
+    global $PEXELS_API_KEY, $PIXABAY_API_KEY, $UNSPLASH_ACCESS_KEY;
+    $provider = resolve_image_provider();
+    if ($provider === null) {
+        return null;
+    }
+
+    if ($provider === 'pexels') {
+        $url = 'https://api.pexels.com/v1/search?' . http_build_query([
+            'query' => $query,
+            'per_page' => 1,
+            'orientation' => 'landscape',
+        ]);
+        $data = http_get_json($url, ['Authorization: ' . $PEXELS_API_KEY]);
+        $photo = $data['photos'][0] ?? null;
+        if (!$photo || empty($photo['src'])) {
+            return null;
+        }
+        $src = $photo['src'];
+        $imageUrl = $src['large'] ?? $src['landscape'] ?? $src['medium'] ?? null;
+        if (!$imageUrl) {
+            return null;
+        }
+        $photographer = trim((string)($photo['photographer'] ?? ''));
+        $credit = $photographer !== '' ? 'Photo by ' . $photographer . ' on Pexels' : 'Photo on Pexels';
+        $link = $photo['url'] ?? 'https://www.pexels.com';
+        return [
+            'url' => $imageUrl,
+            'source' => 'pexels',
+            'credit' => $credit,
+            'link' => $link,
+        ];
+    }
+
+    if ($provider === 'pixabay') {
+        $url = 'https://pixabay.com/api/?' . http_build_query([
+            'key' => $PIXABAY_API_KEY,
+            'q' => $query,
+            'image_type' => 'photo',
+            'safesearch' => 'true',
+            'category' => 'health',
+            'per_page' => 3,
+        ]);
+        $data = http_get_json($url);
+        $hit = $data['hits'][0] ?? null;
+        if (!$hit) {
+            return null;
+        }
+        $imageUrl = $hit['webformatURL'] ?? $hit['largeImageURL'] ?? null;
+        if (!$imageUrl) {
+            return null;
+        }
+        $user = trim((string)($hit['user'] ?? ''));
+        $credit = $user !== '' ? 'Image by ' . $user . ' on Pixabay' : 'Image on Pixabay';
+        $link = $hit['pageURL'] ?? 'https://pixabay.com';
+        return [
+            'url' => $imageUrl,
+            'source' => 'pixabay',
+            'credit' => $credit,
+            'link' => $link,
+        ];
+    }
+
+    if ($provider === 'unsplash') {
+        $url = 'https://api.unsplash.com/search/photos?' . http_build_query([
+            'query' => $query,
+            'per_page' => 1,
+            'orientation' => 'landscape',
+            'content_filter' => 'high',
+        ]);
+        $data = http_get_json($url, ['Authorization: Client-ID ' . $UNSPLASH_ACCESS_KEY]);
+        $photo = $data['results'][0] ?? null;
+        if (!$photo || empty($photo['urls'])) {
+            return null;
+        }
+        $imageUrl = $photo['urls']['regular'] ?? $photo['urls']['small'] ?? null;
+        if (!$imageUrl) {
+            return null;
+        }
+        $name = trim((string)($photo['user']['name'] ?? ''));
+        $credit = $name !== '' ? 'Photo by ' . $name . ' on Unsplash' : 'Photo on Unsplash';
+        $link = $photo['links']['html'] ?? 'https://unsplash.com';
+        if ($link && !str_contains($link, 'utm_source=')) {
+            $link .= (str_contains($link, '?') ? '&' : '?') . 'utm_source=elibrary&utm_medium=referral';
+        }
+        return [
+            'url' => $imageUrl,
+            'source' => 'unsplash',
+            'credit' => $credit,
+            'link' => $link,
+        ];
+    }
+
+    return null;
+}
+
+function cache_resource_fallback_image(int $resourceId, array $data): void {
+    global $pdo;
+    if (!$resourceId || empty($data['url'])) {
+        return;
+    }
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE resources
+            SET fallback_image_url = :url,
+                fallback_image_source = :source,
+                fallback_image_credit = :credit,
+                fallback_image_link = :link,
+                fallback_image_cached_at = :cached_at
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':url' => (string)$data['url'],
+            ':source' => (string)($data['source'] ?? ''),
+            ':credit' => (string)($data['credit'] ?? ''),
+            ':link' => (string)($data['link'] ?? ''),
+            ':cached_at' => date('Y-m-d H:i:s'),
+            ':id' => $resourceId,
+        ]);
+    } catch (Throwable $e) {
+        log_warning('Failed to cache fallback image', ['resource_id' => $resourceId, 'error' => $e->getMessage()]);
+    }
+}
+
+function get_resource_cover_data(array $resource, array $options = []): array {
+    $allowFetch = $options['allow_fetch'] ?? true;
+    $placeholder = $options['placeholder'] ?? ('https://via.placeholder.com/400x280/4a5568/ffffff?text=' . urlencode($resource['title'] ?? 'Resource'));
+
+    if (!empty($resource['cover_image_path'])) {
+        return [
+            'url' => app_path($resource['cover_image_path']),
+            'credit' => null,
+            'credit_link' => null,
+            'source' => 'local',
+            'fallback' => false,
+        ];
+    }
+
+    if (!empty($resource['fallback_image_url'])) {
+        return [
+            'url' => $resource['fallback_image_url'],
+            'credit' => $resource['fallback_image_credit'] ?? null,
+            'credit_link' => $resource['fallback_image_link'] ?? null,
+            'source' => $resource['fallback_image_source'] ?? null,
+            'fallback' => true,
+        ];
+    }
+
+    static $fetchBudget = 3;
+    if ($allowFetch && $fetchBudget > 0 && image_provider_is_configured() && !empty($resource['id'])) {
+        $fetchBudget--;
+        $query = build_fallback_image_query($resource);
+        $data = fetch_medical_image_from_provider($query);
+        if (!empty($data['url'])) {
+            cache_resource_fallback_image((int)$resource['id'], $data);
+            return [
+                'url' => $data['url'],
+                'credit' => $data['credit'] ?? null,
+                'credit_link' => $data['link'] ?? null,
+                'source' => $data['source'] ?? null,
+                'fallback' => true,
+            ];
+        }
+    }
+
+    return [
+        'url' => $placeholder,
+        'credit' => null,
+        'credit_link' => null,
+        'source' => 'placeholder',
+        'fallback' => false,
+    ];
+}
+
 function issue_resource_token(int $resourceId, string $filePath, int $ttlSeconds = 300, ?string $mimeHint = null): string {
     $token = bin2hex(random_bytes(16));
     if (!isset($_SESSION['resource_tokens']) || !is_array($_SESSION['resource_tokens'])) {

@@ -27,6 +27,16 @@ function is_admin(): bool {
     return $u && $u['role'] === 'admin';
 }
 
+function is_staff(): bool {
+    $u = current_user();
+    return $u && $u['role'] === 'staff';
+}
+
+function is_admin_or_staff(): bool {
+    $u = current_user();
+    return $u && in_array($u['role'], ['admin', 'staff'], true);
+}
+
 function require_login() {
     if (!is_logged_in()) {
         log_warning('require_login redirect triggered');

@@ -1052,6 +1052,23 @@ footer::before {
     transition: transform 0.6s ease;
 }
 
+.image-credit {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-radius: 8px;
+    z-index: 2;
+}
+
+.image-credit a {
+    color: #fff;
+    text-decoration: underline;
+}
+
 .resource-card:hover .resource-image {
     transform: scale(1.1);
 }

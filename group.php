@@ -81,7 +81,7 @@ $searchResults = [];
 if ($isGroupAdmin && isset($_GET['search_resource'])) {
     $q = trim($_GET['search_resource']);
     if ($q !== '') {
-        $stmt = $pdo->prepare("SELECT id, title, type FROM resources WHERE COALESCE(status,'approved')='approved' AND (title LIKE :q OR description LIKE :q) LIMIT 10");
+        $stmt = $pdo->prepare("SELECT id, title, type, file_path FROM resources WHERE COALESCE(status,'approved')='approved' AND (title LIKE :q OR description LIKE :q) LIMIT 10");
         $stmt->execute([':q' => '%' . $q . '%']);
         $searchResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -150,6 +150,9 @@ include __DIR__ . '/includes/header.php';
                                     <div class="small text-muted">Added by <?= h($res['added_by_name']) ?> • <?= date('M d, Y', strtotime($res['added_at'])) ?></div>
                                     <?php if (!empty($res['due_date'])): ?>
                                         <div class="small">Due: <strong><?= date('M d, Y', strtotime($res['due_date'])) ?></strong></div>
+                                    <?php endif; ?>
+                                    <?php if (can_view_resource_file_size()): ?>
+                                        <div class="small text-muted"><i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($res)) ?></div>
                                     <?php endif; ?>
                                     <?php if (!empty($res['group_notes'])): ?>
                                         <div class="small text-muted"><?= h($res['group_notes']) ?></div>
@@ -233,6 +236,9 @@ include __DIR__ . '/includes/header.php';
                                     <div>
                                         <strong><?= h($sr['title']) ?></strong>
                                         <span class="badge bg-secondary ms-1"><?= h(strtoupper($sr['type'])) ?></span>
+                                        <?php if (can_view_resource_file_size()): ?>
+                                            <div class="small text-muted mt-1"><i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($sr)) ?></div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <form method="post" class="mt-2">
@@ -262,3 +268,6 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>
+
+
+

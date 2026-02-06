@@ -196,9 +196,10 @@ function render_resource_card(array $r, array $userBookmarks, array $userProgres
     if ($contextSafe === '') {
         $contextSafe = 'main';
     }
-    $cover = !empty($r['cover_image_path'])
-        ? app_path($r['cover_image_path'])
-        : 'https://via.placeholder.com/400x280/667eea/ffffff?text=' . urlencode($r['title']);
+    $coverData = get_resource_cover_data($r);
+    $cover = $coverData['url'];
+    $creditText = $coverData['credit'] ?? null;
+    $creditLink = $coverData['credit_link'] ?? null;
     $typeColors = [
         'pdf' => 'danger',
         'document' => 'primary',
@@ -225,6 +226,11 @@ function render_resource_card(array $r, array $userBookmarks, array $userProgres
                     <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : ($r['type'] === 'link' ? 'link' : 'file-alt')) ?> me-1"></i>
                     <?= strtoupper($r['type']) ?>
                 </span>
+                <?php if ($creditText && $creditLink): ?>
+                    <div class="image-credit">
+                        <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>
+                    </div>
+                <?php endif; ?>
                 <?php if ($progressPercent > 0): ?>
                     <div class="progress-indicator">
                         <div class="progress-indicator-bar" style="width: <?= min(100, $progressPercent) ?>%"></div>
@@ -244,6 +250,12 @@ function render_resource_card(array $r, array $userBookmarks, array $userProgres
                         <i class="fas fa-folder"></i>
                         <?= h($r['category_name']) ?>
                     </span>
+                <?php endif; ?>
+
+                <?php if (can_view_resource_file_size()): ?>
+                    <div class="small text-muted mb-1">
+                        <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($r)) ?>
+                    </div>
                 <?php endif; ?>
 
                 <?php if (!empty($r['description'])): ?>
@@ -293,6 +305,11 @@ function render_resource_card(array $r, array $userBookmarks, array $userProgres
             <div class="modal-content">
                 <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 modal-close-overlay" data-bs-dismiss="modal"></button>
                 <img src="<?= h($cover) ?>" class="img-fluid" alt="<?= h($r['title']) ?>">
+                <?php if ($creditText && $creditLink): ?>
+                    <div class="modal-credit small text-muted p-2 text-center">
+                        <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>

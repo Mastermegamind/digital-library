@@ -33,6 +33,8 @@ try {
     $fileColumnType = ($DB_DRIVER === 'mysql') ? 'VARCHAR(255)' : 'TEXT';
     $statusColumnType = ($DB_DRIVER === 'mysql') ? 'VARCHAR(20)' : 'TEXT';
     $tinyIntType = ($DB_DRIVER === 'mysql') ? 'TINYINT(1)' : 'INTEGER';
+    $fileSizeType = ($DB_DRIVER === 'mysql') ? 'BIGINT UNSIGNED' : 'INTEGER';
+    $imageSourceType = ($DB_DRIVER === 'mysql') ? 'VARCHAR(50)' : 'TEXT';
     $uniqueReviewConstraint = ($DB_DRIVER === 'mysql')
         ? 'UNIQUE KEY unique_review (resource_id, user_id)'
         : 'UNIQUE(resource_id, user_id)';
@@ -114,7 +116,13 @@ try {
             type VARCHAR(50) NOT NULL,
             category_id $foreignKeyType,
             file_path $fileColumnType,
+            file_size $fileSizeType,
             cover_image_path $fileColumnType,
+            fallback_image_url TEXT,
+            fallback_image_source $imageSourceType,
+            fallback_image_credit TEXT,
+            fallback_image_link TEXT,
+            fallback_image_cached_at DATETIME NULL,
             external_url TEXT,
             created_at $createdAtColumn,
             created_by $foreignKeyType,
@@ -128,6 +136,12 @@ try {
     $ensureColumn('resources', 'approved_by', "$foreignKeyType NULL");
     $ensureColumn('resources', 'approved_at', "DATETIME NULL");
     $ensureColumn('resources', 'review_notes', "TEXT NULL");
+    $ensureColumn('resources', 'file_size', "$fileSizeType NULL");
+    $ensureColumn('resources', 'fallback_image_url', "TEXT NULL");
+    $ensureColumn('resources', 'fallback_image_source', "$imageSourceType NULL");
+    $ensureColumn('resources', 'fallback_image_credit', "TEXT NULL");
+    $ensureColumn('resources', 'fallback_image_link', "TEXT NULL");
+    $ensureColumn('resources', 'fallback_image_cached_at', "DATETIME NULL");
 
     // User bookmarks table
     $uniqueConstraint = ($DB_DRIVER === 'mysql') ? 'UNIQUE KEY unique_bookmark (user_id, resource_id)' : 'UNIQUE(user_id, resource_id)';

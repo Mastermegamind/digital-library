@@ -22,7 +22,7 @@ $totalSearchesStmt = $pdo->prepare("SELECT COUNT(*) FROM search_logs WHERE creat
 $totalSearchesStmt->execute([':since' => $since]);
 $totalSearches = (int)$totalSearchesStmt->fetchColumn();
 
-$topViewedStmt = $pdo->prepare("SELECT r.id, r.title, r.type, COUNT(*) AS view_count
+$topViewedStmt = $pdo->prepare("SELECT r.id, r.title, r.type, r.file_path, r.file_size, COUNT(*) AS view_count
                                FROM resource_views rv
                                JOIN resources r ON rv.resource_id = r.id
                                WHERE rv.created_at >= :since
@@ -32,7 +32,7 @@ $topViewedStmt = $pdo->prepare("SELECT r.id, r.title, r.type, COUNT(*) AS view_c
 $topViewedStmt->execute([':since' => $since]);
 $topViewed = $topViewedStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$topDownloadedStmt = $pdo->prepare("SELECT r.id, r.title, r.type, COUNT(*) AS download_count
+$topDownloadedStmt = $pdo->prepare("SELECT r.id, r.title, r.type, r.file_path, r.file_size, COUNT(*) AS download_count
                                    FROM resource_downloads rd
                                    JOIN resources r ON rd.resource_id = r.id
                                    WHERE rd.created_at >= :since
@@ -141,6 +141,11 @@ include __DIR__ . '/../includes/header.php';
                                         <a href="<?= h(app_path('resource/' . $row['id'])) ?>" class="text-decoration-none">
                                             <?= h($row['title']) ?>
                                         </a>
+                                        <?php if (can_view_resource_file_size()): ?>
+                                            <div class="small text-muted">
+                                                <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($row)) ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </td>
                                     <td><?= h(strtoupper($row['type'])) ?></td>
                                     <td class="text-end"><?= number_format($row['view_count']) ?></td>
@@ -175,6 +180,11 @@ include __DIR__ . '/../includes/header.php';
                                         <a href="<?= h(app_path('resource/' . $row['id'])) ?>" class="text-decoration-none">
                                             <?= h($row['title']) ?>
                                         </a>
+                                        <?php if (can_view_resource_file_size()): ?>
+                                            <div class="small text-muted">
+                                                <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($row)) ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </td>
                                     <td><?= h(strtoupper($row['type'])) ?></td>
                                     <td class="text-end"><?= number_format($row['download_count']) ?></td>

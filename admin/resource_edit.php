@@ -58,9 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $filePath = $resource['file_path'];
+    $fileSize = $resource['file_size'] ?? null;
     if ($uploadResult['path']) {
         delete_uploaded_file($resource['file_path']);
         $filePath = $uploadResult['path'];
+        $fileSize = get_resource_file_size_bytes($filePath);
     }
 
     // Handle cover image
@@ -89,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $stmt = $pdo->prepare("UPDATE resources SET
         title = :title, description = :description, type = :type, category_id = :category_id,
-        file_path = :file_path, cover_image_path = :cover, external_url = :external_url
+        file_path = :file_path, file_size = :file_size, cover_image_path = :cover, external_url = :external_url
         WHERE id = :id");
     $stmt->execute([
         ':title' => $title,
@@ -97,6 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ':type' => $type,
         ':category_id' => $category_id,
         ':file_path' => $filePath,
+        ':file_size' => $fileSize,
         ':cover' => $coverPath,
         ':external_url' => $external_url ?: null,
         ':id' => $id,
@@ -257,6 +260,9 @@ include __DIR__ . '/../includes/header.php';
                             <i class="fas fa-check-circle text-success icon-xl"></i>
                             <div>
                                 <strong>Current file:</strong> <?= h(basename($resource['file_path'])) ?><br>
+                                <?php if (can_view_resource_file_size()): ?>
+                                    <small class="text-muted d-block">File size: <?= h(get_resource_file_size_label($resource)) ?></small>
+                                <?php endif; ?>
                                 <small class="text-success">Will be kept if no new file is uploaded</small>
                             </div>
                         </div>

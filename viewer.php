@@ -45,6 +45,7 @@ $viewerDarkMode = $currentUser ? get_user_dark_mode($currentUser['id']) : false;
 $title = $resource['title'];
 $type = $resource['type'];
 $showChat = in_array($type, ['pdf','epub'], true) && function_exists('ai_is_configured') && ai_is_configured();
+$fileSizeLabel = can_view_resource_file_size() ? get_resource_file_size_label($resource) : null;
 $secureToken = null;
 $secureUrl = null;
 $publicFileUrl = !empty($resource['file_path']) ? app_path($resource['file_path']) : null;
@@ -189,6 +190,9 @@ $closeUrl = app_path('');
   <div class="meta">
     <span class="title"><?php echo h($title); ?></span>
     <span><?php echo h(strtoupper($type)); ?></span>
+    <?php if ($fileSizeLabel): ?>
+      <span>Size: <?php echo h($fileSizeLabel); ?></span>
+    <?php endif; ?>
     <?php if (!empty($resource['category_name'])): ?>
       <span><?php echo h($resource['category_name']); ?></span>
     <?php endif; ?>

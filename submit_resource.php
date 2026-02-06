@@ -57,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     $filePath = $uploadResult['path'];
+    $fileSize = $filePath ? get_resource_file_size_bytes($filePath) : null;
 
     if ($requiresFile && empty($filePath)) {
         flash_message('error', 'Please upload a resource file.');
@@ -84,14 +85,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $approvedBy = $status === 'approved' ? $user['id'] : null;
 
     $stmt = $pdo->prepare("INSERT INTO resources
-        (title, description, type, category_id, file_path, cover_image_path, external_url, created_by, status, approved_by, approved_at)
-        VALUES (:title, :description, :type, :category_id, :file_path, :cover, :external_url, :created_by, :status, :approved_by, :approved_at)");
+        (title, description, type, category_id, file_path, file_size, cover_image_path, external_url, created_by, status, approved_by, approved_at)
+        VALUES (:title, :description, :type, :category_id, :file_path, :file_size, :cover, :external_url, :created_by, :status, :approved_by, :approved_at)");
     $stmt->execute([
         ':title' => $title,
         ':description' => $description,
         ':type' => $type,
         ':category_id' => $category_id,
         ':file_path' => $filePath,
+        ':file_size' => $fileSize,
         ':cover' => $coverPath,
         ':external_url' => $external_url ?: null,
         ':created_by' => $user['id'],

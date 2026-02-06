@@ -79,7 +79,10 @@ include __DIR__ . '/includes/header.php';
     <div class="row g-4 mb-4">
         <?php foreach ($bookmarks as $r): ?>
             <?php
-                $cover = !empty($r['cover_image_path']) ? app_path($r['cover_image_path']) : 'https://via.placeholder.com/400x280/667eea/ffffff?text=' . urlencode($r['title']);
+                $coverData = get_resource_cover_data($r);
+                $cover = $coverData['url'];
+                $creditText = $coverData['credit'] ?? null;
+                $creditLink = $coverData['credit_link'] ?? null;
                 $typeColors = ['pdf' => 'danger', 'document' => 'primary', 'video' => 'warning', 'link' => 'info', 'image' => 'success'];
                 $badgeColor = $typeColors[$r['type']] ?? 'secondary';
                 $progress = $userProgress[$r['id']] ?? null;
@@ -93,6 +96,11 @@ include __DIR__ . '/includes/header.php';
                             <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : ($r['type'] === 'link' ? 'link' : 'file-alt')) ?> me-1"></i>
                             <?= strtoupper($r['type']) ?>
                         </span>
+                        <?php if ($creditText && $creditLink): ?>
+                            <div class="image-credit">
+                                <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>
+                            </div>
+                        <?php endif; ?>
                         <?php if ($progressPercent > 0): ?>
                             <div class="progress-indicator">
                                 <div class="progress-indicator-bar" style="width: <?= min(100, $progressPercent) ?>%"></div>
@@ -112,6 +120,12 @@ include __DIR__ . '/includes/header.php';
                                 <i class="fas fa-folder"></i>
                                 <?= h($r['category_name']) ?>
                             </span>
+                        <?php endif; ?>
+
+                        <?php if (can_view_resource_file_size()): ?>
+                            <div class="small text-muted mb-1">
+                                <i class="fas fa-hdd me-1"></i>File size: <?= h(get_resource_file_size_label($r)) ?>
+                            </div>
                         <?php endif; ?>
 
                         <?php if (!empty($r['description'])): ?>
