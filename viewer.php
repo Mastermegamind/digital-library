@@ -432,6 +432,13 @@ $closeUrl = app_path('');
       if (e.data && e.data.type === 'pdfProgress') {
         saveProgress(e.data.page, e.data.percent, e.data.totalPages);
       }
+      // When PDF iframe signals it's ready, restore saved position
+      if (e.data && e.data.type === 'pdfReady' && savedPosition > 0) {
+        const iframe = document.querySelector('.viewer-content iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({ type: 'restorePosition', page: savedPosition }, '*');
+        }
+      }
     });
 
     // =============================================

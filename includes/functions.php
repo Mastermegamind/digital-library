@@ -1499,3 +1499,454 @@ function report_resource_content(string $contentType, int $contentId, int $repor
 
     return true;
 }
+
+// =============================================
+// PASSWORD RESET TOKENS
+// =============================================
+
+function issue_password_reset_token(int $userId, int $ttlSeconds = 3600): string {
+    global $pdo;
+    $token = bin2hex(random_bytes(32));
+    $expiresAt = date('Y-m-d H:i:s', time() + max(600, $ttlSeconds));
+
+    $pdo->prepare("DELETE FROM password_reset_tokens WHERE user_id = :uid")
+        ->execute([':uid' => $userId]);
+
+    $stmt = $pdo->prepare("INSERT INTO password_reset_tokens (user_id, token, expires_at)
+                           VALUES (:uid, :token, :expires_at)");
+    $stmt->execute([
+        ':uid' => $userId,
+        ':token' => $token,
+        ':expires_at' => $expiresAt,
+    ]);
+    return $token;
+}
+
+function verify_password_reset_token(string $token): ?array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT * FROM password_reset_tokens WHERE token = :token LIMIT 1");
+    $stmt->execute([':token' => $token]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return null;
+    }
+    if (strtotime($row['expires_at']) < time()) {
+        $pdo->prepare("DELETE FROM password_reset_tokens WHERE id = :id")->execute([':id' => $row['id']]);
+        return null;
+    }
+
+    $userStmt = $pdo->prepare("SELECT * FROM users WHERE id = :id LIMIT 1");
+    $userStmt->execute([':id' => $row['user_id']]);
+    return $userStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function invalidate_password_reset_tokens(int $userId): void {
+    global $pdo;
+    $pdo->prepare("DELETE FROM password_reset_tokens WHERE user_id = :uid")
+        ->execute([':uid' => $userId]);
+}
+
+// =============================================
+// COLLECTIONS / READING LISTS
+// =============================================
+
+function create_collection(int $userId, string $name, string $description = '', bool $isPublic = false): int {
+    global $pdo;
+    $stmt = $pdo->prepare("INSERT INTO collections (user_id, name, description, is_public)
+                           VALUES (:uid, :name, :desc, :pub)");
+    $stmt->execute([
+        ':uid' => $userId,
+        ':name' => trim($name),
+        ':desc' => trim($description),
+        ':pub' => $isPublic ? 1 : 0,
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+function update_collection(int $collectionId, string $name, string $description, bool $isPublic): void {
+    global $pdo;
+    $stmt = $pdo->prepare("UPDATE collections SET name = :name, description = :desc, is_public = :pub, updated_at = CURRENT_TIMESTAMP WHERE id = :id");
+    $stmt->execute([
+        ':id' => $collectionId,
+        ':name' => trim($name),
+        ':desc' => trim($description),
+        ':pub' => $isPublic ? 1 : 0,
+    ]);
+}
+
+function delete_collection(int $collectionId): void {
+    global $pdo;
+    $pdo->prepare("DELETE FROM collections WHERE id = :id")->execute([':id' => $collectionId]);
+}
+
+function get_user_collections(int $userId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT c.*, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count
+                           FROM collections c WHERE c.user_id = :uid ORDER BY c.created_at DESC");
+    $stmt->execute([':uid' => $userId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function get_collection(int $collectionId): ?array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT c.*, u.name AS owner_name,
+                           (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count
+                           FROM collections c JOIN users u ON c.user_id = u.id WHERE c.id = :id LIMIT 1");
+    $stmt->execute([':id' => $collectionId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function get_collection_items(int $collectionId, int $page = 1, int $perPage = 20): array {
+    global $pdo;
+    $page = max(1, $page);
+    $perPage = max(1, min(100, $perPage));
+    $offset = ($page - 1) * $perPage;
+
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM collection_items WHERE collection_id = :cid");
+    $countStmt->execute([':cid' => $collectionId]);
+    $total = (int)$countStmt->fetchColumn();
+
+    $stmt = $pdo->prepare("SELECT r.*, ci.sort_order, ci.added_at, c.name AS category_name
+                           FROM collection_items ci
+                           JOIN resources r ON ci.resource_id = r.id
+                           LEFT JOIN categories c ON r.category_id = c.id
+                           WHERE ci.collection_id = :cid
+                           ORDER BY ci.sort_order ASC, ci.added_at DESC
+                           LIMIT :limit OFFSET :offset");
+    $stmt->bindValue(':cid', $collectionId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return [
+        'total' => $total,
+        'page' => $page,
+        'per_page' => $perPage,
+        'items' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+    ];
+}
+
+function add_to_collection(int $collectionId, int $resourceId): bool {
+    global $pdo, $DB_DRIVER;
+    $insert = ($DB_DRIVER === 'mysql')
+        ? "INSERT IGNORE INTO collection_items (collection_id, resource_id) VALUES (:cid, :rid)"
+        : "INSERT OR IGNORE INTO collection_items (collection_id, resource_id) VALUES (:cid, :rid)";
+    $stmt = $pdo->prepare($insert);
+    $stmt->execute([':cid' => $collectionId, ':rid' => $resourceId]);
+    return $stmt->rowCount() > 0;
+}
+
+function remove_from_collection(int $collectionId, int $resourceId): void {
+    global $pdo;
+    $pdo->prepare("DELETE FROM collection_items WHERE collection_id = :cid AND resource_id = :rid")
+        ->execute([':cid' => $collectionId, ':rid' => $resourceId]);
+}
+
+// =============================================
+// USER GROUPS / CLASSES
+// =============================================
+
+function generate_join_code(): string {
+    return strtoupper(bin2hex(random_bytes(4)));
+}
+
+function create_group(int $createdBy, string $name, string $description = ''): int {
+    global $pdo;
+    $joinCode = generate_join_code();
+    $stmt = $pdo->prepare("INSERT INTO `groups` (name, description, created_by, join_code)
+                           VALUES (:name, :desc, :uid, :code)");
+    $stmt->execute([
+        ':name' => trim($name),
+        ':desc' => trim($description),
+        ':uid' => $createdBy,
+        ':code' => $joinCode,
+    ]);
+    $groupId = (int)$pdo->lastInsertId();
+
+    // Creator is auto-admin
+    $pdo->prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (:gid, :uid, 'admin')")
+        ->execute([':gid' => $groupId, ':uid' => $createdBy]);
+
+    return $groupId;
+}
+
+function get_group(int $groupId): ?array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT g.*, u.name AS creator_name,
+                           (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS member_count
+                           FROM `groups` g JOIN users u ON g.created_by = u.id WHERE g.id = :id LIMIT 1");
+    $stmt->execute([':id' => $groupId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function get_user_groups(int $userId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT g.*, gm.role AS my_role, u.name AS creator_name,
+                           (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) AS member_count
+                           FROM group_members gm
+                           JOIN `groups` g ON gm.group_id = g.id
+                           JOIN users u ON g.created_by = u.id
+                           WHERE gm.user_id = :uid
+                           ORDER BY g.created_at DESC");
+    $stmt->execute([':uid' => $userId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function join_group_by_code(int $userId, string $code): array {
+    global $pdo, $DB_DRIVER;
+    $code = strtoupper(trim($code));
+    $stmt = $pdo->prepare("SELECT id FROM `groups` WHERE join_code = :code LIMIT 1");
+    $stmt->execute([':code' => $code]);
+    $group = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$group) {
+        return ['success' => false, 'message' => 'Invalid group code.'];
+    }
+
+    $insert = ($DB_DRIVER === 'mysql')
+        ? "INSERT IGNORE INTO group_members (group_id, user_id) VALUES (:gid, :uid)"
+        : "INSERT OR IGNORE INTO group_members (group_id, user_id) VALUES (:gid, :uid)";
+    $ins = $pdo->prepare($insert);
+    $ins->execute([':gid' => $group['id'], ':uid' => $userId]);
+    if ($ins->rowCount() === 0) {
+        return ['success' => false, 'message' => 'You are already a member of this group.'];
+    }
+    return ['success' => true, 'message' => 'Joined group successfully.', 'group_id' => (int)$group['id']];
+}
+
+function leave_group(int $userId, int $groupId): void {
+    global $pdo;
+    $pdo->prepare("DELETE FROM group_members WHERE group_id = :gid AND user_id = :uid")
+        ->execute([':gid' => $groupId, ':uid' => $userId]);
+}
+
+function get_group_members(int $groupId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT u.id, u.name, u.email, u.role AS user_role, gm.role AS group_role, gm.joined_at
+                           FROM group_members gm
+                           JOIN users u ON gm.user_id = u.id
+                           WHERE gm.group_id = :gid
+                           ORDER BY gm.role DESC, gm.joined_at ASC");
+    $stmt->execute([':gid' => $groupId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function get_group_resources(int $groupId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT r.*, gr.due_date, gr.notes AS group_notes, gr.added_at,
+                           c.name AS category_name, u.name AS added_by_name
+                           FROM group_resources gr
+                           JOIN resources r ON gr.resource_id = r.id
+                           LEFT JOIN categories c ON r.category_id = c.id
+                           JOIN users u ON gr.added_by = u.id
+                           WHERE gr.group_id = :gid
+                           ORDER BY gr.due_date ASC, gr.added_at DESC");
+    $stmt->execute([':gid' => $groupId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function add_resource_to_group(int $groupId, int $resourceId, int $addedBy, ?string $dueDate = null, string $notes = ''): bool {
+    global $pdo, $DB_DRIVER;
+    $insert = ($DB_DRIVER === 'mysql')
+        ? "INSERT IGNORE INTO group_resources (group_id, resource_id, added_by, due_date, notes) VALUES (:gid, :rid, :uid, :due, :notes)"
+        : "INSERT OR IGNORE INTO group_resources (group_id, resource_id, added_by, due_date, notes) VALUES (:gid, :rid, :uid, :due, :notes)";
+    $stmt = $pdo->prepare($insert);
+    $stmt->execute([
+        ':gid' => $groupId,
+        ':rid' => $resourceId,
+        ':uid' => $addedBy,
+        ':due' => $dueDate ?: null,
+        ':notes' => trim($notes),
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+function remove_resource_from_group(int $groupId, int $resourceId): void {
+    global $pdo;
+    $pdo->prepare("DELETE FROM group_resources WHERE group_id = :gid AND resource_id = :rid")
+        ->execute([':gid' => $groupId, ':rid' => $resourceId]);
+}
+
+function is_group_admin(int $userId, int $groupId): bool {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT role FROM group_members WHERE group_id = :gid AND user_id = :uid LIMIT 1");
+    $stmt->execute([':gid' => $groupId, ':uid' => $userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row && $row['role'] === 'admin';
+}
+
+function is_group_member(int $userId, int $groupId): bool {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT id FROM group_members WHERE group_id = :gid AND user_id = :uid LIMIT 1");
+    $stmt->execute([':gid' => $groupId, ':uid' => $userId]);
+    return (bool)$stmt->fetch();
+}
+
+function regenerate_join_code(int $groupId): string {
+    global $pdo;
+    $newCode = generate_join_code();
+    $pdo->prepare("UPDATE `groups` SET join_code = :code WHERE id = :id")
+        ->execute([':code' => $newCode, ':id' => $groupId]);
+    return $newCode;
+}
+
+// =============================================
+// QUIZZES
+// =============================================
+
+function get_resource_quizzes(int $resourceId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT q.*, u.name AS creator_name,
+                           (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id) AS question_count,
+                           (SELECT COUNT(*) FROM quiz_attempts qa WHERE qa.quiz_id = q.id) AS attempt_count
+                           FROM quizzes q
+                           JOIN users u ON q.created_by = u.id
+                           WHERE q.resource_id = :rid
+                           ORDER BY q.created_at DESC");
+    $stmt->execute([':rid' => $resourceId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function get_quiz(int $quizId): ?array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT q.*, r.title AS resource_title, u.name AS creator_name
+                           FROM quizzes q
+                           JOIN resources r ON q.resource_id = r.id
+                           JOIN users u ON q.created_by = u.id
+                           WHERE q.id = :id LIMIT 1");
+    $stmt->execute([':id' => $quizId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function get_quiz_questions(int $quizId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT * FROM quiz_questions WHERE quiz_id = :qid ORDER BY sort_order ASC, id ASC");
+    $stmt->execute([':qid' => $quizId]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as &$row) {
+        $row['options'] = json_decode($row['options'], true) ?: [];
+    }
+    return $rows;
+}
+
+function create_quiz(int $resourceId, string $title, string $description, int $createdBy, bool $isAi = false): int {
+    global $pdo;
+    $stmt = $pdo->prepare("INSERT INTO quizzes (resource_id, title, description, created_by, is_ai_generated)
+                           VALUES (:rid, :title, :desc, :uid, :ai)");
+    $stmt->execute([
+        ':rid' => $resourceId,
+        ':title' => trim($title),
+        ':desc' => trim($description),
+        ':uid' => $createdBy,
+        ':ai' => $isAi ? 1 : 0,
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+function add_quiz_question(int $quizId, string $question, string $type, array $options, string $correctAnswer, string $explanation = '', int $sortOrder = 0): int {
+    global $pdo;
+    $stmt = $pdo->prepare("INSERT INTO quiz_questions (quiz_id, question, question_type, options, correct_answer, explanation, sort_order)
+                           VALUES (:qid, :q, :type, :opts, :ans, :expl, :sort)");
+    $stmt->execute([
+        ':qid' => $quizId,
+        ':q' => trim($question),
+        ':type' => $type,
+        ':opts' => json_encode($options),
+        ':ans' => trim($correctAnswer),
+        ':expl' => trim($explanation),
+        ':sort' => $sortOrder,
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+function submit_quiz_attempt(int $quizId, int $userId, array $answers): array {
+    global $pdo;
+    $questions = get_quiz_questions($quizId);
+    $score = 0;
+    $results = [];
+
+    foreach ($questions as $q) {
+        $userAnswer = $answers[$q['id']] ?? '';
+        $isCorrect = strtolower(trim($userAnswer)) === strtolower(trim($q['correct_answer']));
+        if ($isCorrect) $score++;
+        $results[] = [
+            'question_id' => $q['id'],
+            'user_answer' => $userAnswer,
+            'correct_answer' => $q['correct_answer'],
+            'is_correct' => $isCorrect,
+            'explanation' => $q['explanation'],
+        ];
+    }
+
+    $totalQuestions = count($questions);
+    $stmt = $pdo->prepare("INSERT INTO quiz_attempts (quiz_id, user_id, score, total_questions, answers, completed_at)
+                           VALUES (:qid, :uid, :score, :total, :answers, CURRENT_TIMESTAMP)");
+    $stmt->execute([
+        ':qid' => $quizId,
+        ':uid' => $userId,
+        ':score' => $score,
+        ':total' => $totalQuestions,
+        ':answers' => json_encode($results),
+    ]);
+
+    return [
+        'attempt_id' => (int)$pdo->lastInsertId(),
+        'score' => $score,
+        'total_questions' => $totalQuestions,
+        'percentage' => $totalQuestions > 0 ? round(($score / $totalQuestions) * 100) : 0,
+        'results' => $results,
+    ];
+}
+
+function get_user_quiz_attempts(int $userId, ?int $quizId = null): array {
+    global $pdo;
+    if ($quizId) {
+        $stmt = $pdo->prepare("SELECT qa.*, q.title AS quiz_title
+                               FROM quiz_attempts qa JOIN quizzes q ON qa.quiz_id = q.id
+                               WHERE qa.user_id = :uid AND qa.quiz_id = :qid ORDER BY qa.created_at DESC");
+        $stmt->execute([':uid' => $userId, ':qid' => $quizId]);
+    } else {
+        $stmt = $pdo->prepare("SELECT qa.*, q.title AS quiz_title
+                               FROM quiz_attempts qa JOIN quizzes q ON qa.quiz_id = q.id
+                               WHERE qa.user_id = :uid ORDER BY qa.created_at DESC");
+        $stmt->execute([':uid' => $userId]);
+    }
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function get_quiz_stats(int $quizId): array {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT COUNT(*) AS attempts, AVG(score * 100.0 / CASE WHEN total_questions > 0 THEN total_questions ELSE 1 END) AS avg_percent,
+                           MAX(score * 100.0 / CASE WHEN total_questions > 0 THEN total_questions ELSE 1 END) AS best_percent
+                           FROM quiz_attempts WHERE quiz_id = :qid");
+    $stmt->execute([':qid' => $quizId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: ['attempts' => 0, 'avg_percent' => 0, 'best_percent' => 0];
+}
+
+function delete_quiz(int $quizId): void {
+    global $pdo;
+    $pdo->prepare("DELETE FROM quizzes WHERE id = :id")->execute([':id' => $quizId]);
+}
+
+// =============================================
+// AI CONTENT MODERATION
+// =============================================
+
+function ai_moderate_content(string $content): array {
+    if (!function_exists('ai_is_configured') || !ai_is_configured()) {
+        return ['appropriate' => true, 'reason' => ''];
+    }
+    try {
+        require_once __DIR__ . '/ai.php';
+        $result = deepseek_chat_json(
+            'You are a content moderator for an educational platform. Evaluate if the following text is appropriate. Return JSON: {"appropriate": true/false, "reason": "brief reason if inappropriate"}',
+            $content,
+            ['max_tokens' => 200, 'temperature' => 0.1]
+        );
+        if ($result && isset($result['appropriate'])) {
+            return $result;
+        }
+    } catch (\Exception $e) {
+        log_warning('AI moderation failed', ['error' => $e->getMessage()]);
+    }
+    return ['appropriate' => true, 'reason' => ''];
+}

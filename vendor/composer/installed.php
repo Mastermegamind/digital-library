@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'cons-unth/elibrary',
-        'pretty_version' => 'dev-master',
-        'version' => 'dev-master',
-        'reference' => '4a008a527d98d5ffc6468d9f1fa21017808044be',
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => '797eb56b1635bf9f76a7af750e7c369de9fd7205',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -11,9 +11,9 @@
     ),
     'versions' => array(
         'cons-unth/elibrary' => array(
-            'pretty_version' => 'dev-master',
-            'version' => 'dev-master',
-            'reference' => '4a008a527d98d5ffc6468d9f1fa21017808044be',
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => '797eb56b1635bf9f76a7af750e7c369de9fd7205',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
@@ -67,6 +67,15 @@
             'reference' => 'f16e1d5863e37f8d8c2a01719f5b34baa2b714d3',
             'type' => 'library',
             'install_path' => __DIR__ . '/../psr/log',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'smalot/pdfparser' => array(
+            'pretty_version' => 'v2.12.3',
+            'version' => '2.12.3.0',
+            'reference' => '61c9bcafcb92899b76d8ebda6508267bae77e264',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../smalot/pdfparser',
             'aliases' => array(),
             'dev_requirement' => false,
         ),

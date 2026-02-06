@@ -132,6 +132,10 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
         }
         // Initial progress report
         setTimeout(trackProgress, 500);
+        // Signal parent that PDF is ready for position restore
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'pdfReady' }, '*');
+        }
       })
       .catch(err => {
         console.error('PDF load error', err);
@@ -148,6 +152,14 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
           window.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
         } else if (e.data.direction === 'down') {
           window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+        }
+      } else if (e.data.type === 'restorePosition') {
+        const page = parseInt(e.data.page, 10);
+        if (page > 0) {
+          const canvas = container.querySelector('canvas[data-page="' + page + '"]');
+          if (canvas) {
+            canvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
         }
       } else if (e.data.type === 'zoom') {
         if (e.data.fitWidth) {

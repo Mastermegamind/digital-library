@@ -247,8 +247,11 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
                     <label class="form-label"><i class="fas fa-lock me-2"></i>Password</label>
                     <div class="input-wrapper">
                         <span class="input-icon"><i class="fas fa-key"></i></span>
-                        <input type="password" name="password" class="form-control" required 
+                        <input type="password" name="password" class="form-control" required
                                placeholder="Enter your password">
+                        <div class="text-end mt-1">
+                            <a href="<?= h(app_path('forgot-password')) ?>" class="small text-decoration-none">Forgot password?</a>
+                        </div>
                     </div>
 
                     <div class="hint-text">
@@ -291,36 +294,26 @@ $headerFavicon = $toAbsoluteUrl($headerFavicon);
 <script src="<?= app_path('assets/js/bootstrap.bundle.min.js') ?>"></script>
 
 <script>
-// Ensure input shows the start of the value (robust handling for autofill/paste/focus across browsers)
+// Prevent caret jumps by avoiding selection changes during typing.
+// Keep a light-touch autofill handler that doesn't move the cursor.
 (function(){
-    function resetInput(el){
-        try{
-            // place caret at the start and ensure left scroll is 0
-            el.setSelectionRange(0,0);
-            el.scrollLeft = 0;
-        }catch(e){}
+    function ensureLeftVisible(el){
+        if(!el) return;
+        if (document.activeElement === el) return;
+        try { el.scrollLeft = 0; } catch(e){}
     }
 
     function attach(el){
         if(!el) return;
-        var reset = function(){ setTimeout(function(){ resetInput(el); }, 60); };
 
-        ['input','keyup','change','focus'].forEach(function(evt){ el.addEventListener(evt, reset); });
-        el.addEventListener('paste', function(){ setTimeout(reset, 80); });
-
-        // Listen for animationstart which some browsers trigger on autofill
-        el.addEventListener('animationstart', function(e){
-            // any animation associated with autofill will trigger this
-            setTimeout(reset, 60);
+        // Some browsers trigger animationstart on autofill.
+        el.addEventListener('animationstart', function(){
+            setTimeout(function(){ ensureLeftVisible(el); }, 60);
         });
 
-        // Initial attempts on load and multiple retries for the first 2 seconds
-        resetInput(el);
-        var tries = 0;
-        var id = setInterval(function(){ resetInput(el); tries++; if(tries>20){ clearInterval(id); } }, 100);
-
-        window.addEventListener('load', function(){ setTimeout(reset, 80); });
-        window.addEventListener('resize', function(){ setTimeout(reset, 80); });
+        window.addEventListener('load', function(){
+            setTimeout(function(){ ensureLeftVisible(el); }, 80);
+        });
     }
 
     document.addEventListener('DOMContentLoaded', function(){

@@ -36,6 +36,16 @@ if ($requestPath === '/resend-verification') {
     exit;
 }
 
+if ($requestPath === '/forgot-password') {
+    require __DIR__ . '/forgot_password.php';
+    exit;
+}
+
+if ($requestPath === '/reset-password') {
+    require __DIR__ . '/reset_password.php';
+    exit;
+}
+
 if ($requestPath === '/logout') {
     require __DIR__ . '/logout.php';
     exit;
@@ -102,6 +112,34 @@ if ($requestPath === '/notifications') {
     exit;
 }
 
+if ($requestPath === '/collections') {
+    require __DIR__ . '/collections.php';
+    exit;
+}
+
+if (preg_match('#^/collection/([0-9]+)/?$#', $requestPath, $matches)) {
+    $_GET['id'] = (int)$matches[1];
+    require __DIR__ . '/collection.php';
+    exit;
+}
+
+if ($requestPath === '/groups') {
+    require __DIR__ . '/groups.php';
+    exit;
+}
+
+if (preg_match('#^/group/([0-9]+)/?$#', $requestPath, $matches)) {
+    $_GET['id'] = (int)$matches[1];
+    require __DIR__ . '/group.php';
+    exit;
+}
+
+if (preg_match('#^/quiz/([0-9]+)/?$#', $requestPath, $matches)) {
+    $_GET['id'] = (int)$matches[1];
+    require __DIR__ . '/quiz.php';
+    exit;
+}
+
 // API routes
 if ($requestPath === '/api/bookmark') {
     require __DIR__ . '/api/bookmark.php';
@@ -115,6 +153,51 @@ if ($requestPath === '/api/progress') {
 
 if ($requestPath === '/api/settings') {
     require __DIR__ . '/api/settings.php';
+    exit;
+}
+
+if ($requestPath === '/api/collection') {
+    require __DIR__ . '/api/collection.php';
+    exit;
+}
+
+if ($requestPath === '/api/group') {
+    require __DIR__ . '/api/group.php';
+    exit;
+}
+
+if ($requestPath === '/api/quiz') {
+    require __DIR__ . '/api/quiz.php';
+    exit;
+}
+
+if ($requestPath === '/api/chat') {
+    require __DIR__ . '/api/chat.php';
+    exit;
+}
+
+if ($requestPath === '/api/chatbot') {
+    require __DIR__ . '/api/chatbot.php';
+    exit;
+}
+
+if ($requestPath === '/api/summarize') {
+    require __DIR__ . '/api/summarize.php';
+    exit;
+}
+
+if ($requestPath === '/api/suggest-tags') {
+    require __DIR__ . '/api/suggest-tags.php';
+    exit;
+}
+
+if ($requestPath === '/api/generate-quiz') {
+    require __DIR__ . '/api/generate-quiz.php';
+    exit;
+}
+
+if ($requestPath === '/api/smart-search') {
+    require __DIR__ . '/api/smart-search.php';
     exit;
 }
 
@@ -151,6 +234,23 @@ if ($requestPath === '/admin/settings') {
 
 if ($requestPath === '/admin/moderation') {
     require __DIR__ . '/admin/moderation.php';
+    exit;
+}
+
+if ($requestPath === '/admin/groups') {
+    require __DIR__ . '/admin/groups.php';
+    exit;
+}
+
+if (preg_match('#^/admin/quiz/add/([0-9]+)/?$#', $requestPath, $matches)) {
+    $_GET['resource_id'] = (int)$matches[1];
+    require __DIR__ . '/admin/quiz_edit.php';
+    exit;
+}
+
+if (preg_match('#^/admin/quiz/edit/([0-9]+)/?$#', $requestPath, $matches)) {
+    $_GET['id'] = (int)$matches[1];
+    require __DIR__ . '/admin/quiz_edit.php';
     exit;
 }
 

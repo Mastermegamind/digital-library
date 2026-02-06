@@ -344,6 +344,164 @@ try {
         )$tableOptions;
     ");
 
+    // Password reset tokens
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id $primaryKeyDef,
+            user_id $foreignKeyType NOT NULL,
+            token VARCHAR(64) NOT NULL UNIQUE,
+            expires_at DATETIME NOT NULL,
+            created_at $createdAtColumn,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+
+    // Collections (reading lists)
+    $uniqueCollectionItemConstraint = ($DB_DRIVER === 'mysql')
+        ? 'UNIQUE KEY unique_collection_item (collection_id, resource_id)'
+        : 'UNIQUE(collection_id, resource_id)';
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS collections (
+            id $primaryKeyDef,
+            user_id $foreignKeyType NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            is_public $tinyIntType DEFAULT 0,
+            created_at $createdAtColumn,
+            updated_at $createdAtColumn,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS collection_items (
+            id $primaryKeyDef,
+            collection_id $foreignKeyType NOT NULL,
+            resource_id $foreignKeyType NOT NULL,
+            sort_order INT DEFAULT 0,
+            added_at $createdAtColumn,
+            $uniqueCollectionItemConstraint,
+            FOREIGN KEY(collection_id) REFERENCES collections(id) ON DELETE CASCADE,
+            FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+
+    // User groups / classes
+    $uniqueGroupMemberConstraint = ($DB_DRIVER === 'mysql')
+        ? 'UNIQUE KEY unique_group_member (group_id, user_id)'
+        : 'UNIQUE(group_id, user_id)';
+    $uniqueGroupResourceConstraint = ($DB_DRIVER === 'mysql')
+        ? 'UNIQUE KEY unique_group_resource (group_id, resource_id)'
+        : 'UNIQUE(group_id, resource_id)';
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `groups` (
+            id $primaryKeyDef,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            created_by $foreignKeyType NOT NULL,
+            join_code VARCHAR(20) NOT NULL UNIQUE,
+            created_at $createdAtColumn,
+            FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS group_members (
+            id $primaryKeyDef,
+            group_id $foreignKeyType NOT NULL,
+            user_id $foreignKeyType NOT NULL,
+            role VARCHAR(20) NOT NULL DEFAULT 'member',
+            joined_at $createdAtColumn,
+            $uniqueGroupMemberConstraint,
+            FOREIGN KEY(group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS group_resources (
+            id $primaryKeyDef,
+            group_id $foreignKeyType NOT NULL,
+            resource_id $foreignKeyType NOT NULL,
+            added_by $foreignKeyType NOT NULL,
+            due_date DATETIME NULL,
+            notes TEXT,
+            added_at $createdAtColumn,
+            $uniqueGroupResourceConstraint,
+            FOREIGN KEY(group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
+            FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+            FOREIGN KEY(added_by) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+
+    // Quizzes
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS quizzes (
+            id $primaryKeyDef,
+            resource_id $foreignKeyType NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            created_by $foreignKeyType NOT NULL,
+            is_ai_generated $tinyIntType DEFAULT 0,
+            created_at $createdAtColumn,
+            FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+            FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS quiz_questions (
+            id $primaryKeyDef,
+            quiz_id $foreignKeyType NOT NULL,
+            question TEXT NOT NULL,
+            question_type VARCHAR(20) NOT NULL DEFAULT 'multiple_choice',
+            options TEXT,
+            correct_answer TEXT NOT NULL,
+            explanation TEXT,
+            sort_order INT DEFAULT 0,
+            FOREIGN KEY(quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS quiz_attempts (
+            id $primaryKeyDef,
+            quiz_id $foreignKeyType NOT NULL,
+            user_id $foreignKeyType NOT NULL,
+            score INT NOT NULL DEFAULT 0,
+            total_questions INT NOT NULL DEFAULT 0,
+            answers TEXT,
+            completed_at DATETIME NULL,
+            created_at $createdAtColumn,
+            FOREIGN KEY(quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+
+    // Chat messages (Chat with PDF)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id $primaryKeyDef,
+            user_id $foreignKeyType NOT NULL,
+            resource_id $foreignKeyType NOT NULL,
+            role VARCHAR(20) NOT NULL,
+            content TEXT NOT NULL,
+            created_at $createdAtColumn,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+
+    // Study assistant chatbot messages
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS chatbot_messages (
+            id $primaryKeyDef,
+            user_id $foreignKeyType NOT NULL,
+            role VARCHAR(20) NOT NULL,
+            content TEXT NOT NULL,
+            created_at $createdAtColumn,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )$tableOptions;
+    ");
+
+    // AI summary column on resources
+    $ensureColumn('resources', 'ai_summary', 'TEXT NULL');
+
     // Add performance indexes (wrapped in try-catch to handle if already exists)
     try {
         if ($DB_DRIVER === 'mysql') {
