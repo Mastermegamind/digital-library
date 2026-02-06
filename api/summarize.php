@@ -36,32 +36,37 @@ if (!ai_is_configured()) {
 }
 
 $resourceId = (int)($_POST['resource_id'] ?? 0);
-if ($resourceId <= 0) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid resource']);
-    exit;
-}
-
-$stmt = $pdo->prepare("SELECT * FROM resources WHERE id = :id LIMIT 1");
-$stmt->execute([':id' => $resourceId]);
-$resource = $stmt->fetch(PDO::FETCH_ASSOC);
-if (!$resource) {
-    http_response_code(404);
-    echo json_encode(['error' => 'Resource not found']);
-    exit;
-}
+$directTitle = trim($_POST['title'] ?? '');
+$directDescription = trim($_POST['description'] ?? '');
 
 $text = '';
-if (($resource['type'] ?? '') === 'pdf' && !empty($resource['file_path'])) {
-    $filePath = dirname(__DIR__) . '/' . ltrim($resource['file_path'], '/');
-    $text = extract_pdf_text($filePath, 15000) ?: '';
+
+if ($resourceId > 0) {
+    // Existing resource: load from database and extract PDF text if available
+    $stmt = $pdo->prepare("SELECT * FROM resources WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $resourceId]);
+    $resource = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$resource) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Resource not found']);
+        exit;
+    }
+
+    if (($resource['type'] ?? '') === 'pdf' && !empty($resource['file_path'])) {
+        $filePath = dirname(__DIR__) . '/' . ltrim($resource['file_path'], '/');
+        $text = extract_pdf_text($filePath, 15000) ?: '';
+    }
+    if ($text === '') {
+        $text = trim((string)($resource['description'] ?? ''));
+    }
+    if ($text === '') {
+        $text = trim((string)($resource['title'] ?? ''));
+    }
+} else {
+    // New resource (add page): use provided title and description
+    $text = trim($directTitle . "\n" . $directDescription);
 }
-if ($text === '') {
-    $text = trim((string)($resource['description'] ?? ''));
-}
-if ($text === '') {
-    $text = trim((string)($resource['title'] ?? ''));
-}
+
 if ($text === '') {
     http_response_code(400);
     echo json_encode(['error' => 'No content to summarize']);
@@ -77,7 +82,10 @@ if ($summary === null) {
     exit;
 }
 
-$update = $pdo->prepare("UPDATE resources SET ai_summary = :summary WHERE id = :id");
-$update->execute([':summary' => $summary, ':id' => $resourceId]);
+// Only save to database if editing an existing resource
+if ($resourceId > 0) {
+    $update = $pdo->prepare("UPDATE resources SET ai_summary = :summary WHERE id = :id");
+    $update->execute([':summary' => $summary, ':id' => $resourceId]);
+}
 
 echo json_encode(['success' => true, 'summary' => $summary]);

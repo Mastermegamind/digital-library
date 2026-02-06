@@ -1031,6 +1031,8 @@ footer::before {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .resource-card:hover {
@@ -1090,6 +1092,9 @@ footer::before {
 
 .resource-body {
     padding: 1.5rem;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .resource-title {
@@ -1129,7 +1134,45 @@ footer::before {
 
 .resource-actions {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
+    margin-top: auto;
+}
+
+.resource-actions .btn {
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+
+.resource-actions .btn-primary {
+    flex: 1 1 auto;
+    padding: 0 1rem;
+    min-width: 0;
+}
+
+.resource-actions .btn-outline-secondary {
+    width: 40px;
+    flex: 0 0 40px;
+    padding: 0;
+    border-radius: 10px;
+}
+
+.resource-actions .btn-outline-secondary:hover {
+    transform: translateY(-2px);
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+.resource-actions .bookmark-btn {
+    border-radius: 10px;
+    flex: 0 0 40px;
 }
 
 .pagination-container {
@@ -3363,17 +3406,20 @@ footer,
 
     /* Resource cards on mobile */
     .resource-actions {
-        flex-direction: column;
+        flex-wrap: wrap;
         gap: 0.5rem;
     }
 
-    .resource-actions .btn {
+    .resource-actions .btn-primary {
+        flex: 1 1 100%;
         width: 100%;
     }
 
+    .resource-actions .btn-outline-secondary,
     .resource-actions .bookmark-btn {
-        width: 100%;
-        border-radius: 8px;
+        flex: 1 1 auto;
+        width: auto;
+        border-radius: 10px;
     }
 }
 

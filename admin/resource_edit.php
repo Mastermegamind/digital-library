@@ -224,10 +224,16 @@ include __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
                 <div class="col-md-12">
                     <label class="form-label"><i class="fas fa-tags"></i> Tags</label>
-                    <input type="text" name="tags" class="form-control" value="<?= h($resourceTagsInput) ?>"
-                           placeholder="e.g., nursing, pediatrics, pharmacology">
+                    <div class="input-group">
+                        <input type="text" name="tags" class="form-control" value="<?= h($resourceTagsInput) ?>"
+                               placeholder="e.g., nursing, pediatrics, pharmacology">
+                        <button type="button" class="btn btn-outline-secondary" id="aiSuggestTagsBtn" <?= $aiAvailable ? '' : 'disabled' ?>>
+                            <i class="fas fa-robot me-1"></i>Suggest
+                        </button>
+                    </div>
                     <div class="form-text">
                         <i class="fas fa-info-circle"></i>Separate tags with commas.
+                        <?php if (!$aiAvailable): ?> AI suggestions are unavailable until an API key is configured.<?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -390,6 +396,39 @@ document.addEventListener('DOMContentLoaded', function() {
         removeCurrentCover.addEventListener('click', () => {
             document.querySelector('.current-cover').remove();
             if (removeCoverFlag) removeCoverFlag.value = '1';
+        });
+    }
+
+    const suggestBtn = document.getElementById('aiSuggestTagsBtn');
+    if (suggestBtn) {
+        suggestBtn.addEventListener('click', () => {
+            const title = document.querySelector('input[name="title"]').value.trim();
+            const desc = document.querySelector('textarea[name="description"]').value.trim();
+            if (!title && !desc) {
+                showToast('Add a title or description first', 'error');
+                return;
+            }
+            suggestBtn.disabled = true;
+            fetch(appPath + 'api/suggest-tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    csrf_token: csrfToken,
+                    title: title,
+                    description: desc
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    showToast(data.error, 'error');
+                    return;
+                }
+                const tags = data.tags || [];
+                document.querySelector('input[name="tags"]').value = tags.join(', ');
+            })
+            .catch(() => showToast('Failed to suggest tags', 'error'))
+            .finally(() => { suggestBtn.disabled = false; });
         });
     }
 

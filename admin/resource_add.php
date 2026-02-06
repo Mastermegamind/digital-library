@@ -217,6 +217,16 @@ include __DIR__ . '/../includes/header.php';
                     </div>
                 </div>
 
+                <?php if ($aiAvailable): ?>
+                <div class="col-md-12">
+                    <label class="form-label"><i class="fas fa-robot"></i> AI Summary</label>
+                    <div class="text-muted small mb-2" id="aiSummaryPreview">No summary yet. Add a title or description, then generate.</div>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="generateSummaryBtn">
+                        <i class="fas fa-magic me-1"></i>Generate AI Summary
+                    </button>
+                </div>
+                <?php endif; ?>
+
                 <div class="col-md-12">
                     <label class="form-label">
                         <i class="fas fa-tags"></i>
@@ -452,6 +462,44 @@ document.addEventListener('DOMContentLoaded', function() {
         previewImg.src = '';
         coverDropZone.style.display = 'block';
     });
+
+    const summaryBtn = document.getElementById('generateSummaryBtn');
+    if (summaryBtn) {
+        summaryBtn.addEventListener('click', () => {
+            const title = document.querySelector('input[name="title"]').value.trim();
+            const desc = document.querySelector('textarea[name="description"]').value.trim();
+            if (!title && !desc) {
+                showToast('Add a title or description first', 'error');
+                return;
+            }
+            summaryBtn.disabled = true;
+            fetch(appPath + 'api/summarize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    csrf_token: csrfToken,
+                    title: title,
+                    description: desc
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    showToast(data.error, 'error');
+                    return;
+                }
+                const preview = document.getElementById('aiSummaryPreview');
+                if (preview) {
+                    preview.classList.remove('text-muted');
+                    preview.classList.add('alert', 'alert-info', 'small');
+                    preview.textContent = data.summary || '';
+                }
+                showToast('Summary generated', 'success');
+            })
+            .catch(() => showToast('Failed to generate summary', 'error'))
+            .finally(() => { summaryBtn.disabled = false; });
+        });
+    }
 
     const suggestBtn = document.getElementById('aiSuggestTagsBtn');
     if (suggestBtn) {
