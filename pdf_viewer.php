@@ -41,8 +41,6 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
     let currentPage = 1;
     let currentScale = 1.3; // Default scale (100% = 1.3)
     const baseScale = 1.3;
-    let isRendering = false;
-    let pendingRender = null;
 
     const renderPage = async (pdf, pageNumber, scale) => {
       try {
@@ -61,63 +59,19 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
       }
     };
 
-    const renderAllPages = async (scale) => {
-      if (isRendering) {
-        pendingRender = scale;
-        return;
-      }
-
-      isRendering = true;
-
-      // Save current scroll position relative to document
-      const scrollRatio = container.scrollHeight > 0
-        ? window.scrollY / container.scrollHeight
-        : 0;
-
-      // Clear existing canvases
-      container.innerHTML = '';
-
-      try {
-        for (let num = 1; num <= totalPages; num++) {
-          await renderPage(pdfDocument, num, scale);
-        }
-
-        // Restore scroll position
-        requestAnimationFrame(() => {
-          window.scrollTo(0, scrollRatio * container.scrollHeight);
-          setTimeout(trackProgress, 100);
-        });
-      } catch (err) {
-        console.error('PDF render error', err);
-        container.innerHTML = '<p>Unable to render PDF document.</p>';
-      }
-
-      isRendering = false;
-
-      // Check if there's a pending render
-      if (pendingRender !== null) {
-        const nextScale = pendingRender;
-        pendingRender = null;
-        renderAllPages(nextScale);
-      }
-    };
-
     const setZoom = (zoomPercent) => {
-      currentScale = baseScale * (zoomPercent / 100);
-      renderAllPages(currentScale);
+      container.style.zoom = zoomPercent + '%';
     };
 
     const fitToWidth = () => {
       if (!pdfDocument) return;
 
       pdfDocument.getPage(1).then(page => {
-        const viewport = page.getViewport({ scale: 1 });
-        const containerWidth = window.innerWidth - 40; // Account for padding
-        const newScale = containerWidth / viewport.width;
-        const zoomPercent = Math.round((newScale / baseScale) * 100);
+        const viewport = page.getViewport({ scale: baseScale });
+        const containerWidth = window.innerWidth - 40;
+        const zoomPercent = Math.round((containerWidth / viewport.width) * 100);
 
-        currentScale = newScale;
-        renderAllPages(currentScale);
+        container.style.zoom = zoomPercent + '%';
 
         // Report new zoom level to parent
         if (window.parent !== window) {
