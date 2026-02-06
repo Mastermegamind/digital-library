@@ -1355,6 +1355,17 @@ function save_resource_review(int $resourceId, int $userId, int $rating, ?string
     $reviewText = trim((string)$reviewText);
 
     $status = (!empty($REVIEWS_REQUIRE_APPROVAL) && !is_admin()) ? 'pending' : 'approved';
+    if ($reviewText !== '' && function_exists('ai_moderate_content')) {
+        $moderation = ai_moderate_content($reviewText);
+        if (!empty($moderation) && isset($moderation['appropriate']) && !$moderation['appropriate']) {
+            $status = 'pending';
+            log_warning('AI moderation flagged review', [
+                'resource_id' => $resourceId,
+                'user_id' => $userId,
+                'reason' => $moderation['reason'] ?? '',
+            ]);
+        }
+    }
 
     $existing = get_user_review($resourceId, $userId);
     if ($existing) {
@@ -1423,6 +1434,17 @@ function save_resource_comment(int $resourceId, int $userId, string $content, ?i
     global $pdo, $COMMENTS_REQUIRE_APPROVAL;
     $content = trim($content);
     $status = (!empty($COMMENTS_REQUIRE_APPROVAL) && !is_admin()) ? 'pending' : 'approved';
+    if ($content !== '' && function_exists('ai_moderate_content')) {
+        $moderation = ai_moderate_content($content);
+        if (!empty($moderation) && isset($moderation['appropriate']) && !$moderation['appropriate']) {
+            $status = 'pending';
+            log_warning('AI moderation flagged comment', [
+                'resource_id' => $resourceId,
+                'user_id' => $userId,
+                'reason' => $moderation['reason'] ?? '',
+            ]);
+        }
+    }
     $stmt = $pdo->prepare("INSERT INTO resource_comments (resource_id, user_id, parent_id, content, status)
                            VALUES (:rid, :uid, :parent_id, :content, :status)");
     $stmt->execute([

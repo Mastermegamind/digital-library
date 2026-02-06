@@ -229,6 +229,11 @@ include __DIR__ . '/includes/header.php';
                                         title="<?= $isBookmarked ? 'Remove bookmark' : 'Add bookmark' ?>">
                                     <i class="<?= $isBookmarked ? 'fas' : 'far' ?> fa-bookmark"></i>
                                 </button>
+                                <button class="btn btn-outline-secondary add-to-collection-btn"
+                                        data-resource-id="<?= (int)$r['id'] ?>"
+                                        title="Add to Collection">
+                                    <i class="fas fa-folder-plus"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -303,6 +308,11 @@ include __DIR__ . '/includes/header.php';
                                         data-bookmarked="1"
                                         title="Remove bookmark">
                                     <i class="fas fa-bookmark"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary add-to-collection-btn"
+                                        data-resource-id="<?= (int)$r['id'] ?>"
+                                        title="Add to Collection">
+                                    <i class="fas fa-folder-plus"></i>
                                 </button>
                             </div>
                         </div>

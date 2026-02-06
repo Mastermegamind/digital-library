@@ -141,6 +141,11 @@ include __DIR__ . '/includes/header.php';
                                     onclick="handleBookmarkRemove(this, <?= $r['id'] ?>)">
                                 <i class="fas fa-bookmark"></i>
                             </button>
+                            <button class="btn btn-outline-secondary add-to-collection-btn"
+                                    data-resource-id="<?= (int)$r['id'] ?>"
+                                    title="Add to Collection">
+                                <i class="fas fa-folder-plus"></i>
+                            </button>
                         </div>
                     </div>
                 </div>

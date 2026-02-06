@@ -159,6 +159,16 @@ if (!empty($headerUser)) {
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="<?= h(app_path('collections')) ?>">
+                            <i class="fas fa-folder-open me-2"></i>Collections
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= h(app_path('groups')) ?>">
+                            <i class="fas fa-users me-2"></i>Groups
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="<?= h(app_path('submit')) ?>">
                             <i class="fas fa-upload me-2"></i>Submit
                         </a>

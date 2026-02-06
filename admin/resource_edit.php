@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/ai.php';
 $legacyId = (int)($_GET['id'] ?? 0);
 if ($legacyId > 0) {
     redirect_legacy_php('admin/resource/edit/' . $legacyId, ['id' => null]);
@@ -22,6 +23,7 @@ $catStmt = $pdo->query("SELECT * FROM categories ORDER BY name ASC");
 $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
 $resourceTags = get_resource_tags($id);
 $resourceTagsInput = implode(', ', $resourceTags);
+$aiAvailable = function_exists('ai_is_configured') && ai_is_configured();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf = $_POST['csrf_token'] ?? '';
@@ -204,6 +206,19 @@ include __DIR__ . '/../includes/header.php';
                     <label class="form-label"><i class="fas fa-align-left"></i> Description</label>
                     <textarea name="description" class="form-control" rows="4"><?= h($resource['description'] ?? '') ?></textarea>
                 </div>
+                <?php if ($aiAvailable): ?>
+                <div class="col-md-12">
+                    <label class="form-label"><i class="fas fa-robot"></i> AI Summary</label>
+                    <?php if (!empty($resource['ai_summary'])): ?>
+                        <div class="alert alert-info small" id="aiSummaryPreview"><?= nl2br(h($resource['ai_summary'])) ?></div>
+                    <?php else: ?>
+                        <div class="text-muted small mb-2" id="aiSummaryPreview">No summary yet.</div>
+                    <?php endif; ?>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="generateSummaryBtn">
+                        <i class="fas fa-magic me-1"></i>Generate AI Summary
+                    </button>
+                </div>
+                <?php endif; ?>
                 <div class="col-md-12">
                     <label class="form-label"><i class="fas fa-tags"></i> Tags</label>
                     <input type="text" name="tags" class="form-control" value="<?= h($resourceTagsInput) ?>"
@@ -369,6 +384,37 @@ document.addEventListener('DOMContentLoaded', function() {
         removeCurrentCover.addEventListener('click', () => {
             document.querySelector('.current-cover').remove();
             if (removeCoverFlag) removeCoverFlag.value = '1';
+        });
+    }
+
+    const summaryBtn = document.getElementById('generateSummaryBtn');
+    if (summaryBtn) {
+        summaryBtn.addEventListener('click', () => {
+            summaryBtn.disabled = true;
+            fetch(appPath + 'api/summarize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    csrf_token: csrfToken,
+                    resource_id: '<?= (int)$id ?>'
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    showToast(data.error, 'error');
+                    return;
+                }
+                const preview = document.getElementById('aiSummaryPreview');
+                if (preview) {
+                    preview.classList.remove('text-muted');
+                    preview.classList.add('alert', 'alert-info', 'small');
+                    preview.textContent = data.summary || '';
+                }
+                showToast('Summary generated', 'success');
+            })
+            .catch(() => showToast('Failed to generate summary', 'error'))
+            .finally(() => { summaryBtn.disabled = false; });
         });
     }
 });

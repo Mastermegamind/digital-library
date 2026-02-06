@@ -128,6 +128,11 @@ if ($requestPath === '/groups') {
     exit;
 }
 
+if ($requestPath === '/group/join') {
+    require __DIR__ . '/groups.php';
+    exit;
+}
+
 if (preg_match('#^/group/([0-9]+)/?$#', $requestPath, $matches)) {
     $_GET['id'] = (int)$matches[1];
     require __DIR__ . '/group.php';
@@ -242,6 +247,11 @@ if ($requestPath === '/admin/groups') {
     exit;
 }
 
+if ($requestPath === '/admin/quizzes') {
+    require __DIR__ . '/admin/quizzes.php';
+    exit;
+}
+
 if (preg_match('#^/admin/quiz/add/([0-9]+)/?$#', $requestPath, $matches)) {
     $_GET['resource_id'] = (int)$matches[1];
     require __DIR__ . '/admin/quiz_edit.php';
@@ -251,6 +261,11 @@ if (preg_match('#^/admin/quiz/add/([0-9]+)/?$#', $requestPath, $matches)) {
 if (preg_match('#^/admin/quiz/edit/([0-9]+)/?$#', $requestPath, $matches)) {
     $_GET['id'] = (int)$matches[1];
     require __DIR__ . '/admin/quiz_edit.php';
+    exit;
+}
+
+if ($requestPath === '/admin/quiz/generate') {
+    require __DIR__ . '/admin/quiz_generate.php';
     exit;
 }
 

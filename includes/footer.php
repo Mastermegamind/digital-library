@@ -136,6 +136,70 @@
     </div>
 </footer>
 
+<?php
+$showChatbot = false;
+if (is_logged_in()) {
+    require_once __DIR__ . '/ai.php';
+    $showChatbot = function_exists('ai_is_configured') && ai_is_configured();
+}
+?>
+
+<?php if (is_logged_in()): ?>
+<!-- Add to Collection Modal -->
+<div class="modal fade" id="collectionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add to Collection</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="collectionModalList" class="list-group"></div>
+                <div class="text-muted small mt-3">
+                    Need a new collection? <a href="<?= h(app_path('collections')) ?>">Create one</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($showChatbot): ?>
+<style>
+  .chatbot-widget { position: fixed; right: 20px; bottom: 20px; z-index: 1050; }
+  .chatbot-toggle { border: none; background: #1f2937; color: #fff; padding: 12px 16px; border-radius: 999px; box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
+  .chatbot-panel { position: fixed; right: 20px; bottom: 80px; width: 320px; max-height: 420px; background: #fff; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); display: none; flex-direction: column; overflow: hidden; }
+  .chatbot-panel.open { display: flex; }
+  .chatbot-header { padding: 12px 14px; background: #1f2937; color: #fff; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .chatbot-messages { padding: 12px; overflow-y: auto; flex: 1; background: #f8fafc; }
+  .chatbot-message { margin-bottom: 10px; padding: 8px 10px; border-radius: 10px; max-width: 85%; font-size: 0.9rem; }
+  .chatbot-message.user { background: #2563eb; color: #fff; margin-left: auto; }
+  .chatbot-message.assistant { background: #e2e8f0; color: #111827; }
+  .chatbot-input { border-top: 1px solid #e5e7eb; padding: 8px; display: flex; gap: 8px; }
+  .chatbot-input textarea { flex: 1; resize: none; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 8px; font-size: 0.9rem; }
+  .chatbot-input button { border: none; background: #2563eb; color: #fff; padding: 8px 12px; border-radius: 8px; }
+  @media (max-width: 576px) {
+    .chatbot-panel { right: 10px; left: 10px; width: auto; }
+  }
+</style>
+<div class="chatbot-widget">
+    <button class="chatbot-toggle" id="chatbotToggle">
+        <i class="fas fa-robot me-2"></i>Study Assistant
+    </button>
+    <div class="chatbot-panel" id="chatbotPanel">
+        <div class="chatbot-header">
+            <span>Study Assistant</span>
+            <button type="button" class="btn btn-sm btn-light" id="chatbotClose">Close</button>
+        </div>
+        <div class="chatbot-messages" id="chatbotMessages"></div>
+        <form class="chatbot-input" id="chatbotForm">
+            <textarea rows="2" id="chatbotInput" placeholder="Ask me anything..."></textarea>
+            <button type="submit">Send</button>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
 <script src="<?php echo h(app_path('assets/js/bootstrap.bundle.min.js')); ?>"></script>
 
 <!-- App Configuration -->
@@ -354,6 +418,141 @@ function saveReadingProgress(resourceId, position, percent, totalPages = null) {
     }).then(res => res.json()).catch(() => {});
 }
 </script>
+
+<?php if (is_logged_in()): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const collectionModalEl = document.getElementById('collectionModal');
+    const collectionList = document.getElementById('collectionModalList');
+    let currentResourceId = null;
+    let collectionModal = null;
+
+    if (collectionModalEl) {
+        collectionModal = new bootstrap.Modal(collectionModalEl);
+    }
+
+    function renderCollections(collections) {
+        if (!collectionList) return;
+        collectionList.innerHTML = '';
+        if (!collections || collections.length === 0) {
+            collectionList.innerHTML = '<div class="text-muted">No collections found.</div>';
+            return;
+        }
+        collections.forEach(col => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action';
+            btn.textContent = col.name + ' (' + (col.item_count || 0) + ')';
+            btn.addEventListener('click', function() {
+                if (!currentResourceId) return;
+                fetch(appPath + 'api/collection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        csrf_token: csrfToken,
+                        action: 'add_item',
+                        collection_id: col.id,
+                        resource_id: currentResourceId
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showToast(data.error, 'error');
+                    } else {
+                        showToast('Added to collection', 'success');
+                        if (collectionModal) collectionModal.hide();
+                    }
+                })
+                .catch(() => showToast('Failed to add to collection', 'error'));
+            });
+            collectionList.appendChild(btn);
+        });
+    }
+
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.add-to-collection-btn');
+        if (!btn) return;
+        currentResourceId = btn.dataset.resourceId;
+        if (!collectionModal || !collectionList) return;
+        collectionList.innerHTML = '<div class="text-muted">Loading collections...</div>';
+        fetch(appPath + 'api/collection')
+            .then(res => res.json())
+            .then(data => renderCollections(data.collections || []))
+            .catch(() => { collectionList.innerHTML = '<div class="text-danger">Failed to load collections.</div>'; });
+        collectionModal.show();
+    });
+});
+</script>
+<?php endif; ?>
+
+<?php if ($showChatbot): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggle = document.getElementById('chatbotToggle');
+    const panel = document.getElementById('chatbotPanel');
+    const closeBtn = document.getElementById('chatbotClose');
+    const messagesEl = document.getElementById('chatbotMessages');
+    const form = document.getElementById('chatbotForm');
+    const input = document.getElementById('chatbotInput');
+    let historyLoaded = false;
+
+    function appendMessage(role, text) {
+        if (!messagesEl) return;
+        const div = document.createElement('div');
+        div.className = 'chatbot-message ' + role;
+        div.textContent = text;
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function loadHistory() {
+        if (historyLoaded) return;
+        historyLoaded = true;
+        fetch(appPath + 'api/chatbot')
+            .then(res => res.json())
+            .then(data => {
+                (data.messages || []).forEach(msg => appendMessage(msg.role, msg.content));
+            })
+            .catch(() => {});
+    }
+
+    function togglePanel(show) {
+        if (!panel) return;
+        panel.classList.toggle('open', show);
+        if (show) loadHistory();
+    }
+
+    if (toggle) toggle.addEventListener('click', () => togglePanel(!panel.classList.contains('open')));
+    if (closeBtn) closeBtn.addEventListener('click', () => togglePanel(false));
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const message = input ? input.value.trim() : '';
+            if (message === '') return;
+            appendMessage('user', message);
+            if (input) input.value = '';
+
+            fetch(appPath + 'api/chatbot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ csrf_token: csrfToken, message })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    showToast(data.error, 'error');
+                    return;
+                }
+                appendMessage('assistant', data.reply || '');
+            })
+            .catch(() => showToast('Chatbot request failed', 'error'));
+        });
+    }
+});
+</script>
+<?php endif; ?>
 
 </body>
 </html>

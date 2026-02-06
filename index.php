@@ -1,10 +1,12 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/ai.php';
 redirect_legacy_php('');
 require_login();
 
 $currentUser = current_user();
 $isAdmin = is_admin();
+$aiAvailable = function_exists('ai_is_configured') && ai_is_configured();
 
 // Get filter parameters
 $search = trim($_GET['q'] ?? '');
@@ -269,6 +271,13 @@ function render_resource_card(array $r, array $userBookmarks, array $userProgres
                             title="<?= $isBookmarked ? 'Remove bookmark' : 'Add bookmark' ?>">
                         <i class="<?= $isBookmarked ? 'fas' : 'far' ?> fa-bookmark"></i>
                     </button>
+                    <?php if (is_logged_in()): ?>
+                        <button class="btn btn-outline-secondary add-to-collection-btn"
+                                data-resource-id="<?= (int)$r['id'] ?>"
+                                title="Add to Collection">
+                            <i class="fas fa-folder-plus"></i>
+                        </button>
+                    <?php endif; ?>
                     <?php if (is_admin()): ?>
                         <a href="<?= h(app_path('admin/resource/edit/' . $r['id'])) ?>" class="btn btn-outline-secondary">
                             <i class="fas fa-edit"></i>
@@ -401,6 +410,14 @@ include __DIR__ . '/includes/header.php';
                     </span>
                     <input type="text" name="q" class="search-input border-start-0 search-input-field" placeholder="Search resources by title or description..." value="<?= h($search) ?>">
                 </div>
+                <?php if ($aiAvailable): ?>
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="smartSearchToggle">
+                        <label class="form-check-label text-muted" for="smartSearchToggle">
+                            Smart Search (AI)
+                        </label>
+                    </div>
+                <?php endif; ?>
             </div>
             <div class="col-6 col-lg-3">
                 <select name="category" class="form-select search-input">
@@ -603,6 +620,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('page')) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    const smartToggle = document.getElementById('smartSearchToggle');
+    const searchForm = document.getElementById('searchForm');
+    if (smartToggle && searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            if (!smartToggle.checked) return;
+            const input = searchForm.querySelector('input[name=\"q\"]');
+            const query = input ? input.value.trim() : '';
+            if (query === '') return;
+
+            e.preventDefault();
+            fetch(appPath + 'api/smart-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ csrf_token: csrfToken, query: query })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error || !data.data) {
+                    searchForm.submit();
+                    return;
+                }
+                const keywords = data.data.keywords || [];
+                if (keywords.length > 0 && input) {
+                    input.value = keywords.join(' ');
+                }
+                searchForm.submit();
+            })
+            .catch(() => searchForm.submit());
+        });
     }
 });
 </script>

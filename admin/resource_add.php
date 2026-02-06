@@ -1,10 +1,12 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/ai.php';
 redirect_legacy_php('admin/resource/add');
 require_admin();
 
 $catStmt = $pdo->query("SELECT * FROM categories ORDER BY name ASC");
 $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
+$aiAvailable = function_exists('ai_is_configured') && ai_is_configured();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf = $_POST['csrf_token'] ?? '';
@@ -218,11 +220,17 @@ include __DIR__ . '/../includes/header.php';
                         <i class="fas fa-tags"></i>
                         Tags
                     </label>
-                    <input type="text" name="tags" class="form-control"
-                           placeholder="e.g., nursing, pediatrics, pharmacology">
+                    <div class="input-group">
+                        <input type="text" name="tags" class="form-control"
+                               placeholder="e.g., nursing, pediatrics, pharmacology">
+                        <button type="button" class="btn btn-outline-secondary" id="aiSuggestTagsBtn" <?= $aiAvailable ? '' : 'disabled' ?>>
+                            <i class="fas fa-robot me-1"></i>Suggest
+                        </button>
+                    </div>
                     <div class="form-text">
                         <i class="fas fa-info-circle"></i>
                         Separate tags with commas.
+                        <?php if (!$aiAvailable): ?> AI suggestions are unavailable until an API key is configured.<?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -442,6 +450,39 @@ document.addEventListener('DOMContentLoaded', function() {
         previewImg.src = '';
         coverDropZone.style.display = 'block';
     });
+
+    const suggestBtn = document.getElementById('aiSuggestTagsBtn');
+    if (suggestBtn) {
+        suggestBtn.addEventListener('click', () => {
+            const title = document.querySelector('input[name=\"title\"]').value.trim();
+            const desc = document.querySelector('textarea[name=\"description\"]').value.trim();
+            if (!title && !desc) {
+                showToast('Add a title or description first', 'error');
+                return;
+            }
+            suggestBtn.disabled = true;
+            fetch(appPath + 'api/suggest-tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    csrf_token: csrfToken,
+                    title: title,
+                    description: desc
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    showToast(data.error, 'error');
+                    return;
+                }
+                const tags = data.tags || [];
+                document.querySelector('input[name=\"tags\"]').value = tags.join(', ');
+            })
+            .catch(() => showToast('Failed to suggest tags', 'error'))
+            .finally(() => { suggestBtn.disabled = false; });
+        });
+    }
 });
 </script>
 

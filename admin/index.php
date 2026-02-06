@@ -45,6 +45,22 @@ $sections = [
         'color' => 'info',
     ],
     [
+        'title' => 'Groups',
+        'text' => 'Manage classes and study groups.',
+        'link' => app_path('admin/groups'),
+        'btn'  => 'Manage Groups',
+        'icon' => 'users-rectangle',
+        'color' => 'secondary',
+    ],
+    [
+        'title' => 'Quizzes',
+        'text' => 'Create and edit resource quizzes.',
+        'link' => app_path('admin/quizzes'),
+        'btn'  => 'Manage Quizzes',
+        'icon' => 'clipboard-list',
+        'color' => 'purple',
+    ],
+    [
         'title' => 'Reports',
         'text' => 'Analytics on usage and searches.',
         'link' => app_path('admin/reports'),

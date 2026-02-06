@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/ai.php';
 $legacyId = (int)($_GET['id'] ?? 0);
 if ($legacyId > 0) {
     redirect_legacy_php('resource/' . $legacyId, ['id' => null]);
@@ -138,6 +139,26 @@ foreach ($comments as $comment) {
 $resourceTags = get_resource_tags($id);
 $similarResources = get_similar_resources($id, 4);
 $similarTags = get_tags_for_resources(array_column($similarResources, 'id'));
+$resourceQuizzes = get_resource_quizzes($id);
+$quizBestScores = [];
+if ($user && !empty($resourceQuizzes)) {
+    $attempts = get_user_quiz_attempts($user['id']);
+    foreach ($attempts as $attempt) {
+        $qid = (int)($attempt['quiz_id'] ?? 0);
+        if (!$qid) {
+            continue;
+        }
+        $score = (int)($attempt['score'] ?? 0);
+        $total = (int)($attempt['total_questions'] ?? 0);
+        if (!isset($quizBestScores[$qid]) || $score > ($quizBestScores[$qid]['score'] ?? -1)) {
+            $quizBestScores[$qid] = [
+                'score' => $score,
+                'total' => $total,
+            ];
+        }
+    }
+}
+$aiAvailable = function_exists('ai_is_configured') && ai_is_configured();
 
 include __DIR__ . '/includes/header.php';
 ?>
@@ -175,6 +196,26 @@ include __DIR__ . '/includes/header.php';
 
 <?php if (!empty($resource['description'])): ?>
   <p class="mt-3"><?php echo nl2br(h($resource['description'])); ?></p>
+<?php endif; ?>
+
+<?php if (!empty($resource['ai_summary'])): ?>
+  <div class="card mt-3" id="aiSummaryCard">
+    <div class="card-body">
+      <h5 class="card-title"><i class="fas fa-robot me-2"></i>AI Summary</h5>
+      <p class="mb-0" id="aiSummaryText"><?= nl2br(h($resource['ai_summary'])) ?></p>
+    </div>
+  </div>
+<?php elseif ($isAdmin && $aiAvailable): ?>
+  <div class="card mt-3" id="aiSummaryCard">
+    <div class="card-body">
+      <h5 class="card-title"><i class="fas fa-robot me-2"></i>AI Summary</h5>
+      <p class="text-muted mb-3">No summary generated yet.</p>
+      <button type="button" class="btn btn-outline-primary" id="generateSummaryBtn">
+        <i class="fas fa-magic me-2"></i>Generate Summary
+      </button>
+      <div class="mt-3 d-none" id="aiSummaryPreview"></div>
+    </div>
+  </div>
 <?php endif; ?>
 
 <?php if (!empty($resource['cover_image_path'])): ?>
@@ -244,6 +285,48 @@ include __DIR__ . '/includes/header.php';
 
 <?php endif; ?>
 </div>
+
+<?php if (!empty($resourceQuizzes) || $isAdmin): ?>
+  <div class="dashboard-section mt-4">
+    <div class="dashboard-section-header">
+      <h2><i class="fas fa-clipboard-list me-2 text-primary"></i>Quizzes</h2>
+      <?php if ($isAdmin): ?>
+        <a href="<?= h(app_path('admin/quiz/add/' . $id)) ?>" class="btn btn-sm btn-outline-primary">
+          <i class="fas fa-plus me-1"></i>Create Quiz
+        </a>
+      <?php endif; ?>
+    </div>
+    <?php if (empty($resourceQuizzes)): ?>
+      <p class="text-muted mb-0">No quizzes available for this resource.</p>
+    <?php else: ?>
+      <div class="row g-3">
+        <?php foreach ($resourceQuizzes as $quiz): ?>
+          <?php
+            $best = $quizBestScores[$quiz['id']] ?? null;
+            $bestText = $best ? ($best['score'] . '/' . max(1, $best['total'])) : 'No attempts yet';
+          ?>
+          <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title"><?= h($quiz['title']) ?></h5>
+                <?php if (!empty($quiz['description'])): ?>
+                  <p class="card-text text-muted"><?= h(mb_strimwidth($quiz['description'], 0, 120, '...')) ?></p>
+                <?php endif; ?>
+                <div class="d-flex flex-wrap gap-2">
+                  <span class="badge bg-secondary"><?= (int)$quiz['question_count'] ?> questions</span>
+                  <span class="badge bg-info text-dark">Best: <?= h($bestText) ?></span>
+                </div>
+              </div>
+              <div class="card-footer bg-transparent">
+                <a href="<?= h(app_path('quiz/' . $quiz['id'])) ?>" class="btn btn-primary w-100">Take Quiz</a>
+              </div>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
 
 <?php if (!empty($similarResources)): ?>
   <div class="dashboard-section mt-4">
@@ -475,6 +558,50 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+<?php if ($isAdmin && $aiAvailable): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btn = document.getElementById('generateSummaryBtn');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+        btn.disabled = true;
+        btn.innerText = 'Generating...';
+        fetch(appPath + 'api/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                csrf_token: csrfToken,
+                resource_id: '<?= (int)$id ?>'
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                showToast(data.error, 'error');
+                return;
+            }
+            const preview = document.getElementById('aiSummaryPreview');
+            const card = document.getElementById('aiSummaryCard');
+            if (preview) {
+                preview.classList.remove('d-none');
+                preview.textContent = data.summary || '';
+            }
+            if (card && data.summary) {
+                const text = document.getElementById('aiSummaryText');
+                if (text) text.textContent = data.summary;
+            }
+            showToast('Summary generated', 'success');
+        })
+        .catch(() => showToast('Failed to generate summary', 'error'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerText = 'Generate Summary';
+        });
+    });
+});
+</script>
+<?php endif; ?>
 
 <?php if ($type === 'epub' && $fileUrl): ?>
 <!-- Load JSZip first (required for EPUB) -->

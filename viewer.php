@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/ai.php';
 $legacyId = (int)($_GET['id'] ?? 0);
 if ($legacyId > 0) {
     redirect_legacy_php('viewer/' . $legacyId, ['id' => null]);
@@ -43,6 +44,7 @@ $viewerDarkMode = $currentUser ? get_user_dark_mode($currentUser['id']) : false;
 
 $title = $resource['title'];
 $type = $resource['type'];
+$showChat = in_array($type, ['pdf','epub'], true) && function_exists('ai_is_configured') && ai_is_configured();
 $secureToken = null;
 $secureUrl = null;
 $publicFileUrl = !empty($resource['file_path']) ? app_path($resource['file_path']) : null;
@@ -64,6 +66,26 @@ $closeUrl = app_path('');
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?php echo h($title); ?> — Viewer</title>
   <link rel="stylesheet" href="<?php echo h(app_path('assets/css/components.css')); ?>">
+  <?php if ($showChat): ?>
+  <style>
+    .viewer-wrapper.with-chat { display: flex; }
+    .viewer-content { flex: 1; }
+    .viewer-chat { width: 320px; border-left: 1px solid #e5e7eb; background: #ffffff; display: none; flex-direction: column; }
+    .viewer-chat.open { display: flex; }
+    .viewer-chat-header { padding: 10px 12px; background: #f3f4f6; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+    .viewer-chat-messages { flex: 1; overflow-y: auto; padding: 10px; background: #f8fafc; }
+    .viewer-chat-message { margin-bottom: 8px; padding: 8px 10px; border-radius: 8px; max-width: 90%; font-size: 0.9rem; }
+    .viewer-chat-message.user { background: #2563eb; color: #fff; margin-left: auto; }
+    .viewer-chat-message.assistant { background: #e2e8f0; color: #111827; }
+    .viewer-chat-input { border-top: 1px solid #e5e7eb; padding: 8px; display: flex; gap: 8px; }
+    .viewer-chat-input textarea { flex: 1; resize: none; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px; font-size: 0.9rem; }
+    .viewer-chat-input button { border: none; background: #2563eb; color: #fff; border-radius: 6px; padding: 6px 10px; }
+    @media (max-width: 992px) {
+      .viewer-chat { position: fixed; top: 60px; right: 0; bottom: 0; transform: translateX(100%); transition: transform 0.2s ease; z-index: 999; display: flex; }
+      .viewer-chat.open { transform: translateX(0); }
+    }
+  </style>
+  <?php endif; ?>
 </head>
 <body class="viewer-page">
   <!-- Progress tracking configuration -->
@@ -106,9 +128,12 @@ $closeUrl = app_path('');
       </button>
       <button type="button" id="zoom-fit" class="toolbar-btn" title="Fit to Width">Fit</button>
     </div>
+    <?php if ($showChat): ?>
+      <button type="button" id="chat-toggle" class="toolbar-btn" title="Chat">Chat</button>
+    <?php endif; ?>
   </div>
 
-  <div class="viewer-wrapper">
+  <div class="viewer-wrapper<?= $showChat ? ' with-chat' : '' ?>">
     <div class="viewer-content">
       <?php if ($type === 'pdf' && $secureToken): ?>
         <?php $pdfFrame = app_path('pdf/' . urlencode($secureToken)); ?>
@@ -147,6 +172,19 @@ $closeUrl = app_path('');
         </div>
       <?php endif; ?>
     </div>
+    <?php if ($showChat): ?>
+      <aside class="viewer-chat" id="viewerChat">
+        <div class="viewer-chat-header">
+          <span>Study Helper</span>
+          <button type="button" class="toolbar-btn" id="chat-close">Close</button>
+        </div>
+        <div class="viewer-chat-messages" id="chatMessages"></div>
+        <form class="viewer-chat-input" id="chatForm">
+          <textarea rows="2" id="chatInput" placeholder="Ask about this document..."></textarea>
+          <button type="submit">Send</button>
+        </form>
+      </aside>
+    <?php endif; ?>
   </div>
   <div class="meta">
     <span class="title"><?php echo h($title); ?></span>
@@ -434,10 +472,12 @@ $closeUrl = app_path('');
       }
       // When PDF iframe signals it's ready, restore saved position
       if (e.data && e.data.type === 'pdfReady' && savedPosition > 0) {
-        const iframe = document.querySelector('.viewer-content iframe');
-        if (iframe && iframe.contentWindow) {
-          iframe.contentWindow.postMessage({ type: 'restorePosition', page: savedPosition }, '*');
-        }
+        setTimeout(() => {
+          const iframe = document.querySelector('.viewer-content iframe');
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({ type: 'restorePosition', page: savedPosition }, '*');
+          }
+        }, 1500);
       }
     });
 
@@ -672,6 +712,79 @@ $closeUrl = app_path('');
         }
       });
     })();
+
+    <?php if ($showChat): ?>
+    // =============================================
+    // AI CHAT SIDEBAR
+    // =============================================
+    (function() {
+      const chatToggle = document.getElementById('chat-toggle');
+      const chatClose = document.getElementById('chat-close');
+      const chatPanel = document.getElementById('viewerChat');
+      const chatMessages = document.getElementById('chatMessages');
+      const chatForm = document.getElementById('chatForm');
+      const chatInput = document.getElementById('chatInput');
+      let historyLoaded = false;
+
+      function appendMessage(role, text) {
+        if (!chatMessages) return;
+        const div = document.createElement('div');
+        div.className = 'viewer-chat-message ' + role;
+        div.textContent = text;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function loadHistory() {
+        if (historyLoaded) return;
+        historyLoaded = true;
+        fetch(appPath + 'api/chat?resource_id=' + resourceId)
+          .then(res => res.json())
+          .then(data => {
+            (data.messages || []).forEach(msg => appendMessage(msg.role, msg.content));
+          })
+          .catch(() => {});
+      }
+
+      function toggleChat(show) {
+        if (!chatPanel) return;
+        chatPanel.classList.toggle('open', show);
+        if (show) loadHistory();
+      }
+
+      if (chatToggle) chatToggle.addEventListener('click', () => toggleChat(!chatPanel.classList.contains('open')));
+      if (chatClose) chatClose.addEventListener('click', () => toggleChat(false));
+
+      if (chatForm) {
+        chatForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          const message = chatInput ? chatInput.value.trim() : '';
+          if (!message) return;
+          appendMessage('user', message);
+          if (chatInput) chatInput.value = '';
+
+          fetch(appPath + 'api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              csrf_token: csrfToken,
+              resource_id: resourceId,
+              message: message
+            })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.error) {
+              appendMessage('assistant', 'Sorry, I could not respond.');
+              return;
+            }
+            appendMessage('assistant', data.reply || '');
+          })
+          .catch(() => appendMessage('assistant', 'Sorry, I could not respond.'));
+        });
+      }
+    })();
+    <?php endif; ?>
   </script>
 </body>
 </html>
