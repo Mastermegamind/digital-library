@@ -346,11 +346,14 @@ $closeUrl = app_path('');
           if (rendition) rendition.next();
         });
         
-        // Keyboard navigation
+        // Keyboard navigation (use PageUp/PageDown to avoid stealing arrow keys)
         document.addEventListener('keydown', function(e) {
-          if (e.key === 'ArrowLeft') {
+          if (e.defaultPrevented) return;
+          if (e.key === 'PageUp') {
+            e.preventDefault();
             if (rendition) rendition.prev();
-          } else if (e.key === 'ArrowRight') {
+          } else if (e.key === 'PageDown') {
+            e.preventDefault();
             if (rendition) rendition.next();
           }
         });
@@ -381,6 +384,34 @@ $closeUrl = app_path('');
           }
           zoomLevel.textContent = currentZoom + '%';
         }
+
+        window.epubZoomIn = function() {
+          currentZoom = Math.min(currentZoom + 10, 200);
+          applyZoom();
+        };
+
+        window.epubZoomOut = function() {
+          currentZoom = Math.max(currentZoom - 10, 50);
+          applyZoom();
+        };
+
+        window.epubScrollLeft = function() {
+          const iframe = holder.querySelector('iframe');
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.scrollBy({ left: -200, top: 0, behavior: 'smooth' });
+          } else if (holder) {
+            holder.scrollBy({ left: -200, top: 0, behavior: 'smooth' });
+          }
+        };
+
+        window.epubScrollRight = function() {
+          const iframe = holder.querySelector('iframe');
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.scrollBy({ left: 200, top: 0, behavior: 'smooth' });
+          } else if (holder) {
+            holder.scrollBy({ left: 200, top: 0, behavior: 'smooth' });
+          }
+        };
         
         // Font size controls
         document.getElementById('epub-font-increase').addEventListener('click', function() {
@@ -499,6 +530,8 @@ $closeUrl = app_path('');
       const iframe = document.querySelector('.viewer-content iframe');
       const viewerContent = document.querySelector('.viewer-content');
       const isVideoFocused = video && document.activeElement === video;
+      const isPdf = viewerType === 'pdf';
+      const isEpub = viewerType === 'epub';
 
       const scrollByAmount = (dx, dy) => {
         if (viewerType === 'pdf' && iframe && iframe.contentWindow) {
@@ -513,9 +546,12 @@ $closeUrl = app_path('');
 
       switch(e.key) {
         case 'ArrowLeft':
-          if (viewerType === 'epub') return;
           e.preventDefault();
-          if (isVideoFocused) {
+          if (isPdf && typeof window.viewerZoomOut === 'function') {
+            window.viewerZoomOut();
+          } else if (isEpub && typeof window.epubScrollLeft === 'function') {
+            window.epubScrollLeft();
+          } else if (isVideoFocused) {
             video.currentTime = Math.max(0, video.currentTime - 10);
           } else {
             scrollByAmount(-200, 0);
@@ -523,9 +559,12 @@ $closeUrl = app_path('');
           break;
 
         case 'ArrowRight':
-          if (viewerType === 'epub') return;
           e.preventDefault();
-          if (isVideoFocused) {
+          if (isPdf && typeof window.viewerZoomIn === 'function') {
+            window.viewerZoomIn();
+          } else if (isEpub && typeof window.epubScrollRight === 'function') {
+            window.epubScrollRight();
+          } else if (isVideoFocused) {
             video.currentTime = Math.min(video.duration || 0, video.currentTime + 10);
           } else {
             scrollByAmount(200, 0);
@@ -534,7 +573,9 @@ $closeUrl = app_path('');
 
         case 'ArrowUp':
           e.preventDefault();
-          if (isVideoFocused) {
+          if (isEpub && typeof window.epubZoomIn === 'function') {
+            window.epubZoomIn();
+          } else if (isVideoFocused) {
             video.volume = Math.min(1, video.volume + 0.1);
           } else {
             scrollByAmount(0, -200);
@@ -543,7 +584,9 @@ $closeUrl = app_path('');
 
         case 'ArrowDown':
           e.preventDefault();
-          if (isVideoFocused) {
+          if (isEpub && typeof window.epubZoomOut === 'function') {
+            window.epubZoomOut();
+          } else if (isVideoFocused) {
             video.volume = Math.max(0, video.volume - 0.1);
           } else {
             scrollByAmount(0, 200);
@@ -677,6 +720,11 @@ $closeUrl = app_path('');
       if (zoomOutBtn) zoomOutBtn.addEventListener('click', zoomOut);
       if (zoomResetBtn) zoomResetBtn.addEventListener('click', zoomReset);
       if (zoomFitBtn) zoomFitBtn.addEventListener('click', zoomFit);
+
+      window.viewerZoomIn = zoomIn;
+      window.viewerZoomOut = zoomOut;
+      window.viewerZoomReset = zoomReset;
+      window.viewerZoomFit = zoomFit;
 
       // Keyboard shortcuts for zoom
       document.addEventListener('keydown', function(e) {

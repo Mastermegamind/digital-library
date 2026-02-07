@@ -41,6 +41,10 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
     let currentPage = 1;
     let currentScale = 1.3; // Default scale (100% = 1.3)
     const baseScale = 1.3;
+    let currentZoomPercent = 100;
+    const minZoom = 25;
+    const maxZoom = 300;
+    const zoomStep = 10;
 
     const renderPage = async (pdf, pageNumber, scale) => {
       try {
@@ -60,7 +64,12 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
     };
 
     const setZoom = (zoomPercent) => {
-      container.style.zoom = zoomPercent + '%';
+      const nextZoom = Math.max(minZoom, Math.min(maxZoom, zoomPercent));
+      currentZoomPercent = nextZoom;
+      container.style.zoom = nextZoom + '%';
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'zoomUpdate', level: nextZoom }, '*');
+      }
     };
 
     const fitToWidth = () => {
@@ -70,13 +79,7 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
         const viewport = page.getViewport({ scale: baseScale });
         const containerWidth = window.innerWidth - 40;
         const zoomPercent = Math.round((containerWidth / viewport.width) * 100);
-
-        container.style.zoom = zoomPercent + '%';
-
-        // Report new zoom level to parent
-        if (window.parent !== window) {
-          window.parent.postMessage({ type: 'zoomUpdate', level: zoomPercent }, '*');
-        }
+        setZoom(zoomPercent);
       });
     };
 
@@ -163,7 +166,7 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
           dx = scrollAmount;
         }
         if (dx !== 0 || dy !== 0) {
-          window.scrollBy({ left: dx, top: dy, behavior: 'smooth' });
+          (container || window).scrollBy({ left: dx, top: dy, behavior: 'smooth' });
         }
       } else if (e.data.type === 'restorePosition') {
         const page = parseInt(e.data.page, 10);
@@ -190,39 +193,41 @@ $pdfWorker = app_path('assets/pdfjs/pdf.worker.mjs');
       switch(e.key) {
         case 'ArrowUp':
           e.preventDefault();
-          window.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
+          (container || window).scrollBy({ top: -scrollAmount, behavior: 'smooth' });
           break;
         case 'ArrowDown':
           e.preventDefault();
-          window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+          (container || window).scrollBy({ top: scrollAmount, behavior: 'smooth' });
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          window.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+          setZoom(currentZoomPercent - zoomStep);
           break;
         case 'ArrowRight':
           e.preventDefault();
-          window.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+          setZoom(currentZoomPercent + zoomStep);
           break;
         case 'PageUp':
           e.preventDefault();
-          window.scrollBy({ top: -pageAmount, behavior: 'smooth' });
+          (container || window).scrollBy({ top: -pageAmount, behavior: 'smooth' });
           break;
         case 'PageDown':
           e.preventDefault();
-          window.scrollBy({ top: pageAmount, behavior: 'smooth' });
+          (container || window).scrollBy({ top: pageAmount, behavior: 'smooth' });
           break;
         case ' ':
           e.preventDefault();
-          window.scrollBy({ top: pageAmount, behavior: 'smooth' });
+          (container || window).scrollBy({ top: pageAmount, behavior: 'smooth' });
           break;
         case 'Home':
           e.preventDefault();
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          (container || window).scrollTo({ top: 0, behavior: 'smooth' });
           break;
         case 'End':
           e.preventDefault();
-          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+          const target = (container || window);
+          const maxScroll = container ? container.scrollHeight : document.body.scrollHeight;
+          target.scrollTo({ top: maxScroll, behavior: 'smooth' });
           break;
       }
       // Trigger progress tracking after scroll

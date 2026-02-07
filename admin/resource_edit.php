@@ -291,7 +291,7 @@ include __DIR__ . '/../includes/header.php';
 
                     <?php if (!empty($resource['cover_image_path'])): ?>
                         <div class="current-cover">
-                            <img src="<?= h(app_path($resource['cover_image_path'])) ?>" alt="Current cover">
+                            <img src="<?= h(app_path($resource['cover_image_path'])) ?>" alt="Current cover" data-resource-image="1">
                             <button type="button" class="image-preview-remove" id="removeCurrentCover">Remove Current Cover</button>
                             <input type="hidden" name="remove_cover" id="removeCoverFlag" value="0">
                         </div>

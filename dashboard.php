@@ -131,10 +131,12 @@ include __DIR__ . '/includes/header.php';
                     'placeholder' => 'https://via.placeholder.com/60x60/667eea/ffffff?text=' . urlencode(substr($r['title'], 0, 1)),
                 ]);
                 $cover = $coverData['url'];
+                $coverIsPlaceholder = ($coverData['source'] ?? '') === 'placeholder';
             ?>
             <div class="col-md-6">
                 <a href="<?= h(app_path('viewer/' . $r['id'])) ?>" class="continue-reading-card">
-                    <img src="<?= h($cover) ?>" alt="<?= h($r['title']) ?>" class="resource-thumb" loading="lazy">
+                    <img src="<?= h($cover) ?>" alt="<?= h($r['title']) ?>" class="resource-thumb" loading="lazy"
+                         data-resource-image="1" <?= $coverIsPlaceholder ? 'data-fallback="1"' : '' ?>>
                     <div class="resource-info">
                         <div class="resource-title"><?= h($r['title']) ?></div>
                         <div class="resource-progress">
@@ -191,6 +193,7 @@ include __DIR__ . '/includes/header.php';
                     $cover = $coverData['url'];
                     $creditText = $coverData['credit'] ?? null;
                     $creditLink = $coverData['credit_link'] ?? null;
+                    $coverIsPlaceholder = ($coverData['source'] ?? '') === 'placeholder';
                     $typeColors = ['pdf' => 'danger', 'document' => 'primary', 'video' => 'warning', 'link' => 'info', 'image' => 'success'];
                     $badgeColor = $typeColors[$r['type']] ?? 'secondary';
                     $isBookmarked = in_array($r['id'], $userBookmarks);
@@ -199,7 +202,8 @@ include __DIR__ . '/includes/header.php';
                 <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                     <div class="resource-card">
                         <div class="resource-image-wrapper">
-                            <img src="<?= h($cover) ?>" class="resource-image" alt="<?= h($r['title']) ?>" loading="lazy">
+                            <img src="<?= h($cover) ?>" class="resource-image" alt="<?= h($r['title']) ?>" loading="lazy"
+                                 data-resource-image="1" <?= $coverIsPlaceholder ? 'data-fallback="1"' : '' ?>>
                             <span class="resource-badge text-<?= $badgeColor ?>">
                                 <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : 'file-alt') ?> me-1"></i>
                                 <?= strtoupper($r['type']) ?>
@@ -295,13 +299,15 @@ include __DIR__ . '/includes/header.php';
                     $cover = $coverData['url'];
                     $creditText = $coverData['credit'] ?? null;
                     $creditLink = $coverData['credit_link'] ?? null;
+                    $coverIsPlaceholder = ($coverData['source'] ?? '') === 'placeholder';
                     $typeColors = ['pdf' => 'danger', 'document' => 'primary', 'video' => 'warning', 'link' => 'info', 'image' => 'success'];
                     $badgeColor = $typeColors[$r['type']] ?? 'secondary';
                 ?>
                 <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                     <div class="resource-card">
                         <div class="resource-image-wrapper">
-                            <img src="<?= h($cover) ?>" class="resource-image" alt="<?= h($r['title']) ?>" loading="lazy">
+                            <img src="<?= h($cover) ?>" class="resource-image" alt="<?= h($r['title']) ?>" loading="lazy"
+                                 data-resource-image="1" <?= $coverIsPlaceholder ? 'data-fallback="1"' : '' ?>>
                             <span class="resource-badge text-<?= $badgeColor ?>">
                                 <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : 'file-alt') ?> me-1"></i>
                                 <?= strtoupper($r['type']) ?>

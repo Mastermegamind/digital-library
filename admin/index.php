@@ -9,7 +9,7 @@ $sections = [
         'text' => 'View quick stats and recent activity.',
         'link' => app_path('admin/dashboard'),
         'btn'  => 'Go to Dashboard',
-        'icon' => 'chart-line',
+        'icon' => 'tachometer-alt',
         'color' => 'primary',
     ],
     [
@@ -17,7 +17,7 @@ $sections = [
         'text' => 'Manage all uploaded learning resources.',
         'link' => app_path('admin/resources'),
         'btn'  => 'Manage Resources',
-        'icon' => 'book',
+        'icon' => 'book-open',
         'color' => 'success',
     ],
     [
@@ -33,7 +33,7 @@ $sections = [
         'text' => 'Create or edit resource categories.',
         'link' => app_path('admin/categories'),
         'btn'  => 'Manage Categories',
-        'icon' => 'folder-open',
+        'icon' => 'folder-tree',
         'color' => 'warning',
     ],
     [
@@ -49,7 +49,7 @@ $sections = [
         'text' => 'Manage classes and study groups.',
         'link' => app_path('admin/groups'),
         'btn'  => 'Manage Groups',
-        'icon' => 'users-rectangle',
+        'icon' => 'users-cog',  // Changed to a free FontAwesome icon
         'color' => 'secondary',
     ],
     [
@@ -57,7 +57,7 @@ $sections = [
         'text' => 'Create and edit resource quizzes.',
         'link' => app_path('admin/quizzes'),
         'btn'  => 'Manage Quizzes',
-        'icon' => 'clipboard-list',
+        'icon' => 'clipboard-check',
         'color' => 'purple',
     ],
     [
@@ -65,7 +65,7 @@ $sections = [
         'text' => 'Analytics on usage and searches.',
         'link' => app_path('admin/reports'),
         'btn'  => 'View Reports',
-        'icon' => 'chart-bar',
+        'icon' => 'chart-line',  // Changed to a free FontAwesome icon
         'color' => 'secondary',
     ],
     [
@@ -73,10 +73,11 @@ $sections = [
         'text' => 'Control registration and verification.',
         'link' => app_path('admin/settings'),
         'btn'  => 'Open Settings',
-        'icon' => 'sliders-h',
+        'icon' => 'cogs',
         'color' => 'purple',
     ],
 ];
+
 
 $meta_title = 'Admin Panel - ' . $APP_NAME;
 $meta_description = 'Administrative overview and management tools for ' . $APP_NAME . '.';

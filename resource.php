@@ -229,9 +229,11 @@ include __DIR__ . '/includes/header.php';
   $cover = $coverData['url'];
   $creditText = $coverData['credit'] ?? null;
   $creditLink = $coverData['credit_link'] ?? null;
+  $coverIsPlaceholder = ($coverData['source'] ?? '') === 'placeholder';
 ?>
 <div class="my-3 position-relative">
-  <img src="<?php echo h($cover); ?>" alt="Cover image" class="img-fluid rounded shadow-sm border">
+  <img src="<?php echo h($cover); ?>" alt="Cover image" class="img-fluid rounded shadow-sm border resource-cover"
+       data-resource-image="1" <?= $coverIsPlaceholder ? 'data-fallback="1"' : '' ?>>
   <?php if ($creditText && $creditLink): ?>
     <div class="image-credit">
       <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>
@@ -355,6 +357,7 @@ include __DIR__ . '/includes/header.php';
           $simCover = $simCoverData['url'];
           $simCreditText = $simCoverData['credit'] ?? null;
           $simCreditLink = $simCoverData['credit_link'] ?? null;
+          $simCoverIsPlaceholder = ($simCoverData['source'] ?? '') === 'placeholder';
           $simBadgeColor = 'secondary';
           if (!empty($sim['type'])) {
             $simBadgeColor = str_contains($sim['type'], 'pdf') ? 'danger' : (str_contains($sim['type'], 'video') ? 'warning' : 'primary');
@@ -365,7 +368,8 @@ include __DIR__ . '/includes/header.php';
         <div class="col-12 col-sm-6 col-md-4 col-lg-3">
           <div class="resource-card">
             <div class="resource-image-wrapper">
-              <img src="<?= h($simCover) ?>" class="resource-image" alt="<?= h($sim['title']) ?>" loading="lazy">
+              <img src="<?= h($simCover) ?>" class="resource-image" alt="<?= h($sim['title']) ?>" loading="lazy"
+                   data-resource-image="1" <?= $simCoverIsPlaceholder ? 'data-fallback="1"' : '' ?>>
               <span class="resource-badge text-<?= h($simBadgeColor) ?>">
                 <i class="fas fa-book me-1"></i><?= strtoupper($sim['type'] ?? 'FILE') ?>
               </span>

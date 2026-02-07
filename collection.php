@@ -115,9 +115,11 @@ require_once __DIR__ . '/includes/header.php';
                             $cover = $coverData['url'];
                             $creditText = $coverData['credit'] ?? null;
                             $creditLink = $coverData['credit_link'] ?? null;
+                            $coverIsPlaceholder = ($coverData['source'] ?? '') === 'placeholder';
                         ?>
                         <div class="position-relative">
-                            <img src="<?= h($cover) ?>" class="card-img-top" style="height:160px;object-fit:cover" alt="">
+                            <img src="<?= h($cover) ?>" class="card-img-top" style="height:160px;object-fit:cover" alt=""
+                                 data-resource-image="1" <?= $coverIsPlaceholder ? 'data-fallback="1"' : '' ?>>
                             <?php if ($creditText && $creditLink): ?>
                                 <div class="image-credit">
                                     <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>

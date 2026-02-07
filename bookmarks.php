@@ -83,6 +83,7 @@ include __DIR__ . '/includes/header.php';
                 $cover = $coverData['url'];
                 $creditText = $coverData['credit'] ?? null;
                 $creditLink = $coverData['credit_link'] ?? null;
+                $coverIsPlaceholder = ($coverData['source'] ?? '') === 'placeholder';
                 $typeColors = ['pdf' => 'danger', 'document' => 'primary', 'video' => 'warning', 'link' => 'info', 'image' => 'success'];
                 $badgeColor = $typeColors[$r['type']] ?? 'secondary';
                 $progress = $userProgress[$r['id']] ?? null;
@@ -91,7 +92,8 @@ include __DIR__ . '/includes/header.php';
             <div class="col-12 col-sm-6 col-md-4 col-lg-3" id="bookmark-card-<?= $r['id'] ?>">
                 <div class="resource-card">
                     <div class="resource-image-wrapper">
-                        <img src="<?= h($cover) ?>" class="resource-image" alt="<?= h($r['title']) ?>" loading="lazy">
+                        <img src="<?= h($cover) ?>" class="resource-image" alt="<?= h($r['title']) ?>" loading="lazy"
+                             data-resource-image="1" <?= $coverIsPlaceholder ? 'data-fallback="1"' : '' ?>>
                         <span class="resource-badge text-<?= $badgeColor ?>">
                             <i class="fas fa-<?= $r['type'] === 'pdf' ? 'file-pdf' : ($r['type'] === 'video' ? 'video' : ($r['type'] === 'link' ? 'link' : 'file-alt')) ?> me-1"></i>
                             <?= strtoupper($r['type']) ?>

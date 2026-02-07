@@ -120,8 +120,10 @@ include __DIR__ . '/../includes/header.php';
                             $cover = !empty($resource['cover_image_path']) 
                                 ? app_path($resource['cover_image_path']) 
                                 : 'https://via.placeholder.com/60x60/667eea/ffffff?text=' . urlencode(substr($resource['title'], 0, 1));
+                            $coverIsPlaceholder = empty($resource['cover_image_path']);
                         ?>
-                        <img src="<?= h($cover) ?>" alt="Cover" class="resource-cover-mini">
+                        <img src="<?= h($cover) ?>" alt="Cover" class="resource-cover-mini"
+                             data-resource-image="1" <?= $coverIsPlaceholder ? 'data-fallback="1"' : '' ?>>
                     </div>
                     <div class="col">
                         <div class="fw-bold text-truncate">

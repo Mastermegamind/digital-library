@@ -215,7 +215,7 @@ foreach ($resources as $r) {
                             <td>
                                 <?php if (!empty($r['cover_image_path'])): ?>
                                     <?php $coverUrl = app_path($r['cover_image_path']); ?>
-                                    <img src="<?= h($coverUrl) ?>" alt="Cover" class="resource-cover-thumb">
+                                    <img src="<?= h($coverUrl) ?>" alt="Cover" class="resource-cover-thumb" data-resource-image="1">
                                 <?php else: ?>
                                     <div class="resource-cover-thumb resource-cover-placeholder d-flex align-items-center justify-content-center">
                                         <i class="fas fa-book text-white resource-cover-placeholder-icon"></i>

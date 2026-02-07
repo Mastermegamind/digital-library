@@ -336,6 +336,60 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =============================================
+    // IMAGE FALLBACK (fontawesome book icon)
+    // =============================================
+    const applyImageFallback = (img, force = false) => {
+        if (!img) return;
+        if (img.dataset.fallbackApplied === '1') return;
+        if (!force && img.dataset.fallback !== '1') return;
+        img.dataset.fallbackApplied = '1';
+
+        const wrapper = img.closest('.resource-image-wrapper, .position-relative') || img.parentElement;
+        if (!wrapper) return;
+
+        const style = window.getComputedStyle(wrapper);
+        if (style.position === 'static') {
+            wrapper.style.position = 'relative';
+        }
+
+        const existing = wrapper.querySelector('.image-fallback');
+        if (!existing) {
+            const fallback = document.createElement('div');
+            fallback.className = 'image-fallback';
+            fallback.innerHTML = '<i class="fas fa-book"></i>';
+
+            const imgRect = img.getBoundingClientRect();
+            const wrapperRect = wrapper.getBoundingClientRect();
+            if (imgRect.width && imgRect.height && wrapperRect.width && wrapperRect.height) {
+                fallback.style.width = imgRect.width + 'px';
+                fallback.style.height = imgRect.height + 'px';
+                fallback.style.left = (imgRect.left - wrapperRect.left) + 'px';
+                fallback.style.top = (imgRect.top - wrapperRect.top) + 'px';
+                fallback.style.right = 'auto';
+                fallback.style.bottom = 'auto';
+            }
+
+            wrapper.appendChild(fallback);
+        }
+        img.style.display = 'none';
+    };
+
+    const attachImageFallback = (img) => {
+        if (!img || img.dataset.fallbackBound === '1') return;
+        img.dataset.fallbackBound = '1';
+        img.addEventListener('error', () => {
+            applyImageFallback(img, true);
+        });
+        if (img.dataset.fallback === '1') {
+            applyImageFallback(img, true);
+        }
+    };
+
+    document.querySelectorAll(
+        'img[data-resource-image="1"], img.resource-image, img.resource-thumb, img.resource-cover-thumb, img.resource-cover-mini, img.card-img-top, img.resource-cover'
+    ).forEach(attachImageFallback);
+
+    // =============================================
     // LAZY LOADING WITH INTERSECTION OBSERVER
     // =============================================
     if ('IntersectionObserver' in window) {
@@ -348,6 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         img.removeAttribute('data-src');
                     }
                     img.classList.remove('lazy-image');
+                    attachImageFallback(img);
                     observer.unobserve(img);
                 }
             });

@@ -200,6 +200,7 @@ function render_resource_card(array $r, array $userBookmarks, array $userProgres
     $cover = $coverData['url'];
     $creditText = $coverData['credit'] ?? null;
     $creditLink = $coverData['credit_link'] ?? null;
+    $coverIsPlaceholder = ($coverData['source'] ?? '') === 'placeholder';
     $typeColors = [
         'pdf' => 'danger',
         'document' => 'primary',
@@ -220,6 +221,7 @@ function render_resource_card(array $r, array $userBookmarks, array $userProgres
         <div class="resource-card">
             <div class="resource-image-wrapper">
                 <img src="<?= h($cover) ?>" class="resource-image resource-zoomable" alt="<?= h($r['title']) ?>" loading="lazy"
+                     data-resource-image="1" <?= $coverIsPlaceholder ? 'data-fallback="1"' : '' ?>
                      data-bs-toggle="modal" data-bs-target="#<?= h($modalId) ?>"
                 >
                 <span class="resource-badge text-<?= h($badgeColor) ?>">
@@ -304,7 +306,7 @@ function render_resource_card(array $r, array $userBookmarks, array $userProgres
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 modal-close-overlay" data-bs-dismiss="modal"></button>
-                <img src="<?= h($cover) ?>" class="img-fluid" alt="<?= h($r['title']) ?>">
+                <img src="<?= h($cover) ?>" class="img-fluid" alt="<?= h($r['title']) ?>" data-resource-image="1" <?= $coverIsPlaceholder ? 'data-fallback="1"' : '' ?>>
                 <?php if ($creditText && $creditLink): ?>
                     <div class="modal-credit small text-muted p-2 text-center">
                         <a href="<?= h($creditLink) ?>" target="_blank" rel="noopener"><?= h($creditText) ?></a>
