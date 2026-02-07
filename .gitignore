@@ -17,7 +17,12 @@ php.ini.local
 *.sqlite
 
 # Uploads
-uploads/*
+#uploads/*
+uploads/**/*.pdf
+uploads/**/*.png
+uploads/**/*.jpg
+uploads/**/*.jpeg
+uploads/**/*.webp
 !uploads/.gitkeep
 
 # Logs
@@ -25,7 +30,6 @@ logs/*
 !logs/.gitkeep
 
 # Sensitive files
-includes/config.php
 .env
 .env.local
 
